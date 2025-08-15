@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>World Happiness Conquest</title>
+<title>World Happiness Conquest — Expanded</title>
 <style>
-  :root { --bg:#0f1220; --card:#171a2b; --ink:#e8ecff; --muted:#aeb7d9; --accent:#7bd389; --bad:#ef6a6a; }
+  :root { --bg:#0f1220; --card:#171a2b; --ink:#e8ecff; --muted:#aeb7d9; --accent:#7bd389; --bad:#ef6a6a; --gold:#ffd34d; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial; }
   header { padding:16px 20px; border-bottom:1px solid #24284a; display:flex; gap:12px; align-items:center; flex-wrap:wrap;}
   header h1 { font-size:20px; margin:0; letter-spacing:.4px; }
   header .small { color:var(--muted); font-size:12px }
-  #app { display:grid; grid-template-columns: 1.2fr .8fr; gap:16px; padding:16px; }
-  @media (max-width: 980px){ #app { grid-template-columns: 1fr; } }
+  #app { display:grid; grid-template-columns: 1.25fr .75fr; gap:16px; padding:16px; }
+  @media (max-width: 1080px){ #app { grid-template-columns: 1fr; } }
   .panel { background:var(--card); border:1px solid #24284a; border-radius:12px; overflow:hidden; }
   .panel h2 { font-size:16px; margin:0 0 12px 0; }
   .pad { padding:16px; }
-  #mapWrap { height: 64vh; min-height:420px; }
+  #mapWrap { height: 62vh; min-height:420px; }
   #map svg { width:100%; height:100%; display:block; background:#87b7e9; }
   .controls { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px; }
   select,button,input { background:#202443; color:var(--ink); border:1px solid #2c335d; padding:8px 10px; border-radius:8px; font:inherit; }
@@ -25,23 +25,33 @@
   .pill { font-size:12px; padding:4px 8px; border-radius:999px; background:#1b1f39; border:1px solid #2c335d; color:var(--muted) }
   .statrow { display:flex; gap:10px; flex-wrap:wrap; }
   .stat { background:#1b1f39; border:1px solid #2c335d; border-radius:10px; padding:8px 10px; }
-  .list { display:grid; gap:8px; max-height:240px; overflow:auto; }
+  .list { display:grid; gap:8px; max-height:220px; overflow:auto; }
   .row { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#1b1f39; border:1px solid #2c335d; border-radius:10px; padding:8px 10px; }
   .row small { color:var(--muted); }
   .row input[type="range"]{ width:120px; }
   .legend { display:flex; align-items:center; gap:6px; }
   .swatch { width:16px; height:10px; border-radius:3px; border:1px solid #0006}
-  .log { height:140px; overflow:auto; background:#101328; border:1px solid #24284a; border-radius:10px; padding:8px 10px; font-size:13px }
+  .log { height:130px; overflow:auto; background:#101328; border:1px solid #24284a; border-radius:10px; padding:8px 10px; font-size:13px }
   .hint { color:var(--muted); font-size:12px; }
   .leader { font-weight:600; color:var(--accent) }
   .danger { color:var(--bad) }
   .center { display:flex; align-items:center; gap:8px; }
+  /* region overlay styling */
+  .region-cell { stroke:#101328; stroke-width:.6; cursor:pointer; }
+  .region-cell:hover { stroke:#fff; stroke-width:1; }
+  .region-selected { stroke:var(--gold) !important; stroke-width:2 !important; }
+  /* sub-panels */
+  .subgrid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+  @media (max-width: 500px){ .subgrid { grid-template-columns: 1fr; } }
+  .banner { background:#1b1f39; border:1px solid #3b447a; border-left:4px solid var(--gold); padding:8px 10px; border-radius:8px; margin:8px 0; }
+  .market { display:flex; gap:8px; flex-wrap:wrap; }
+  .market .stat { min-width:120px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>World Happiness Conquest</h1>
-  <span class="small">Goal: have the highest citizen satisfaction (population-weighted).</span>
+  <h1>World Happiness Conquest — Expanded</h1>
+  <span class="small">Win by highest population-weighted happiness. Now with Events, Resources, Trade & Projects.</span>
 </header>
 
 <div id="app">
@@ -54,6 +64,8 @@
           <select id="countrySelect"></select>
           <button id="startBtn" class="primary">Start Game</button>
           <button id="resetViewBtn" class="ghost">Reset View</button>
+          <button id="saveBtn" class="ghost">💾 Save</button>
+          <button id="loadBtn" class="ghost">📂 Load</button>
         </div>
         <div class="legend">
           <span class="pill">Happiness</span>
@@ -62,11 +74,14 @@
           <div class="swatch" style="background:#1a9850"></div><small>high</small>
         </div>
       </div>
+      <div id="eventBanner" class="banner" style="display:none;"></div>
     </div>
+
     <div id="mapWrap"><div id="map"></div></div>
+
     <div class="pad">
       <div class="statrow" id="leaderboard"></div>
-      <p class="hint">Tip: Click any country on the map to inspect. Only your country shows action buttons.</p>
+      <p class="hint">Tip: Click a country to zoom and reveal its internal regions. Click a region to select it.</p>
     </div>
   </div>
 
@@ -75,6 +90,7 @@
     <div class="pad">
       <h2 id="panelTitle">No country selected</h2>
       <div id="countryStats" style="display:none">
+
         <div class="statrow">
           <div class="stat">Overall Happiness: <strong id="overallH"></strong></div>
           <div class="stat">Money: <strong id="money"></strong></div>
@@ -83,8 +99,34 @@
           <span class="pill" id="playerTag" style="display:none">You</span>
         </div>
 
+        <!-- Resources & Market -->
+        <div class="subgrid">
+          <div>
+            <h3>Resources</h3>
+            <div class="market" id="marketPrices"></div>
+            <div class="list" id="resourceTotals"></div>
+          </div>
+          <div>
+            <h3>Trade & Diplomacy</h3>
+            <div class="row">
+              <select id="tradePartner"></select>
+              <select id="tradeResource">
+                <option value="Food">Food</option><option value="Oil">Oil</option><option value="Tech">Tech</option><option value="Tourism">Tourism</option>
+              </select>
+              <input id="tradeAmount" type="number" min="1" value="10" style="width:80px"/>
+            </div>
+            <div class="controls">
+              <button id="sellBtn">Sell (get money)</button>
+              <button id="buyBtn">Buy (spend money)</button>
+              <button id="allyBtn">Propose Alliance</button>
+            </div>
+            <p class="hint" id="relationHint"></p>
+          </div>
+        </div>
+
         <!-- Player actions -->
-        <div id="actions" style="margin-top:10px; display:none">
+        <h3>Actions</h3>
+        <div id="actions" style="margin-top:0">
           <div class="controls">
             <button id="investBtn">Invest in selected region ($200 → +6 happiness)</button>
             <button id="developAllBtn">Develop nationwide ($400 → +2 each region)</button>
@@ -95,15 +137,28 @@
               <option value="socialism">Socialism (+3 all regions)</option>
               <option value="communism">Communism (+1 all regions)</option>
             </select>
-            <button id="saveBtn" class="ghost">💾 Save</button>
-            <button id="loadBtn" class="ghost">📂 Load</button>
           </div>
-          <p class="hint">Select a region below to target your investment.</p>
         </div>
 
-        <!-- Regions list -->
-        <h3>Regions</h3>
-        <div class="list" id="regions"></div>
+        <!-- Regions & Projects -->
+        <div class="subgrid" style="margin-top:10px">
+          <div>
+            <h3>Regions</h3>
+            <div class="list" id="regions"></div>
+          </div>
+          <div>
+            <h3>Region Projects</h3>
+            <div class="row">
+              <select id="projectSelect">
+                <option value="infra">Infrastructure (4 turns • +2 happiness/turn)</option>
+                <option value="upgrade">Resource Upgrade (3 turns • +20% prod)</option>
+                <option value="culture">Cultural Program (2 turns • +8 happiness)</option>
+              </select>
+              <button id="startProjectBtn">Start in selected region ($250)</button>
+            </div>
+            <div class="list" id="projectList"></div>
+          </div>
+        </div>
 
         <h3>World Log</h3>
         <div class="log" id="log"></div>
@@ -121,10 +176,11 @@
 /* =========================
    Helpers & deterministic RNG
    ========================= */
-const STORAGE_KEY = 'whc_v1_save';
+const STORAGE_KEY = 'whc_v3_save';
 
 const fmtMoney = (v)=>'$'+Math.round(v).toLocaleString();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const RESOURCES = ['Food','Oil','Tech','Tourism'];
 
 function xorshift(seed) { let x = seed >>> 0; return function(){ x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x>>>0)/4294967296); } }
 function pickWeightedDirichlet(rand, n) {
@@ -138,13 +194,21 @@ function pickWeightedDirichlet(rand, n) {
    ========================= */
 const state = {
   countries: new Map(), // id(string)-> country obj
+  relations: new Map(), // key "A|B" -> relation (-100..100)
+  alliances: new Set(), // key "A|B"
   features: [],
   landFeature: null,
   playerId: null,
   selectedId: null,
+  selectedRegionIdx: 0,
   tickMs: 6000,
   running: false,
+  regionOverlayG: null,
+  turn: 0,
+  market: { Food: 4, Oil: 9, Tech: 12, Tourism: 7 }, // starting prices
 };
+
+function keyPair(a,b){ return String(a)<String(b) ? `${a}|${b}` : `${b}|${a}`; }
 
 function overallHappiness(c){
   const tot = c.regions.reduce((s,r)=>s+r.population,0);
@@ -166,18 +230,10 @@ function sizeMap(){
 
   if(!svg){
     svg = mapEl.append('svg');
-    g = svg.append('g');            // everything (ocean, land, countries) inside g so zoom works
+    g = svg.append('g'); // everything inside g so zoom works
 
-    oceanPath = g.append('path')    // ocean INSIDE g
-      .attr('class','ocean')
-      .attr('fill','#87b7e9')
-      .attr('stroke','none');
-
-    landPath = g.append('path')     // base land under countries
-      .attr('class','land')
-      .attr('fill','#dfe8c5')
-      .attr('stroke','#1b1f39')
-      .attr('stroke-width',0.3);
+    oceanPath = g.append('path').attr('class','ocean').attr('fill','#87b7e9').attr('stroke','none');
+    landPath  = g.append('path').attr('class','land').attr('fill','#dfe8c5').attr('stroke','#1b1f39').attr('stroke-width',0.3);
   }
 
   svg.attr('viewBox', `0 0 ${W} ${H}`);
@@ -186,13 +242,13 @@ function sizeMap(){
 
   oceanPath.attr('d', path({type:'Sphere'}));
   if(state.landFeature) landPath.attr('d', path(state.landFeature));
-
   redrawCountries();
+  if(state.selectedId) buildRegionOverlay(state.selectedId);
 }
 window.addEventListener('resize', sizeMap);
 
 /* ==========================================
-   Load world: topology + robust name mapping
+   Load world & names
    ========================================== */
 async function loadNames() {
   const urls = [
@@ -237,39 +293,58 @@ async function initWorld(){
 
   // init countries
   state.countries.clear();
+  const ids = [];
   for(const f of state.features){
     const id = f.properties.cid;
-    const name = f.properties.name;
+    const name = f.properties.name; ids.push(id);
     const rand = xorshift(+id * 2654435761);
     const regionsCount = 3 + Math.floor(rand()*6); // 3..8
     const weights = pickWeightedDirichlet(rand, regionsCount);
     const totalPop = 2_000_000 + Math.floor(rand()*60_000_000); // fictional baseline
     const baseH = 40 + Math.floor(rand()*30); // 40..70
-    const regions = weights.map((w,i)=>({
-      name: `${name} Region ${i+1}`,
-      population: Math.max(50_000, Math.round(totalPop*w)),
-      happiness: clamp(baseH + Math.floor(rand()*20-10), 10, 90)
-    }));
+    const regions = weights.map((w,i)=>{
+      // assign one resource per region
+      const res = RESOURCES[Math.floor(rand()*RESOURCES.length)];
+      const prod = 5 + Math.floor(rand()*20); // 5..24 per turn
+      return {
+        name: `${name} Region ${i+1}`,
+        population: Math.max(50_000, Math.round(totalPop*w)),
+        happiness: clamp(baseH + Math.floor(rand()*20-10), 10, 90),
+        resource: res,
+        production: prod,
+        project: null // {type,durationLeft,desc}
+      };
+    });
     state.countries.set(id, {
       id, name,
-      money: 1000 + Math.floor(rand()*1500),
+      money: 1200 + Math.floor(rand()*1500),
       military: 30 + Math.floor(rand()*70),
       government: 'democracy',
       regions,
+      stock: { Food:0, Oil:0, Tech:0, Tourism:0 },
       isAI: true
     });
+  }
+
+  // initialize neutral relations
+  for(let i=0;i<ids.length;i++){
+    for(let j=i+1;j<ids.length;j++){
+      state.relations.set(`${ids[i]}|${ids[j]}`, 0);
+    }
   }
 
   populateSelector();
   redrawCountries();
   updateLeaderboard();
+  refreshMarket();
   log(`World ready: ${state.countries.size} countries.`);
 }
 
+/* =========================
+   Draw / update countries
+   ========================= */
 function redrawCountries(){
   if(!state.features.length || !path) return;
-
-  // keep ocean/land synced to projection
   oceanPath.attr('d', path({type:'Sphere'}));
   if(state.landFeature) landPath.attr('d', path(state.landFeature));
 
@@ -293,15 +368,20 @@ function redrawCountries(){
   sel.exit().remove();
 }
 
-function zoomToFeature(f){
+function zoomToFeature(f, cb){
   const b = path.bounds(f);
   const dx = b[1][0]-b[0][0], dy=b[1][1]-b[0][1];
   const x = (b[0][0]+b[1][0])/2, y=(b[0][1]+b[1][1])/2;
   const scale = Math.max(1, Math.min(8, 0.9/Math.max(dx/W, dy/H)));
   const translate = [W/2 - scale*x, H/2 - scale*y];
-  g.transition().duration(700).attr('transform', `translate(${translate}) scale(${scale})`);
+  g.transition().duration(700)
+    .attr('transform', `translate(${translate}) scale(${scale})`)
+    .on('end', ()=> cb && cb());
 }
-document.getElementById('resetViewBtn').onclick = ()=> g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
+document.getElementById('resetViewBtn').onclick = ()=>{
+  g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
+  clearRegionOverlay();
+};
 
 /* =========================
    UI: selector + panel
@@ -321,8 +401,10 @@ function populateSelector(){
 
 function selectCountry(id, zoom=false){
   state.selectedId = String(id);
+  state.selectedRegionIdx = 0;
   const f = state.features.find(fe => fe.properties.cid === String(id));
-  if (zoom && f) zoomToFeature(f);
+  if (zoom && f) zoomToFeature(f, ()=> buildRegionOverlay(id));
+  else buildRegionOverlay(id);
   renderPanel();
 }
 
@@ -350,39 +432,245 @@ function renderPanel(){
   document.getElementById('government').textContent = c.government;
   document.getElementById('playerTag').style.display = (String(c.id)===String(state.playerId)) ? '' : 'none';
   document.getElementById('actions').style.display = (String(c.id)===String(state.playerId)) ? '' : 'none';
-  // regions
-  const list = document.getElementById('regions');
-  list.innerHTML='';
+
+  // regions sidebar
+  const list = document.getElementById('regions'); list.innerHTML='';
   c.regions.forEach((r,idx)=>{
     const row = document.createElement('div'); row.className='row';
+    const sel = (idx===state.selectedRegionIdx) ? 'checked' : '';
     row.innerHTML = `
       <div style="flex:1 1 auto">
         <strong>${r.name}</strong><br/>
-        <small>Pop: ${r.population.toLocaleString()} • Happiness: <span id="rH${idx}">${Math.round(r.happiness)}</span></small>
+        <small>Pop: ${r.population.toLocaleString()} • Resource: ${r.resource} • Prod: ${r.production}/t • Happiness: <span id="rH${idx}">${Math.round(r.happiness)}</span></small>
       </div>
-      <input type="radio" name="regionPick" value="${idx}" ${idx===0?'checked':''} />
+      <input type="radio" name="regionPick" value="${idx}" ${sel} />
       <input type="range" min="0" max="100" value="${Math.round(r.happiness)}" disabled />
     `;
+    row.querySelector('input[type=radio]').addEventListener('change', ()=>{
+      state.selectedRegionIdx = idx; highlightSelectedRegionOnMap();
+      renderProjects(); // show correct region's project
+    });
     list.appendChild(row);
   });
+
+  // resources/market panel
+  refreshMarket();
+  renderResourceTotals(c);
+  renderTradeUI();
+
   updateLeaderboard();
   redrawCountries();
+  highlightSelectedRegionOnMap();
+  renderProjects();
 }
 
 /* =========================
-   Player actions
+   Market / Resources / Trade
+   ========================= */
+function refreshMarket(){
+  // simple random walk with bounds
+  for(const k of RESOURCES){
+    let p = state.market[k];
+    const drift = (k==='Tech') ? 0.3 : (k==='Tourism'?0.2:0.15);
+    p += (Math.random()-0.5)*2*drift;
+    p = clamp(p, 2, 20);
+    state.market[k] = Math.round(p*10)/10;
+  }
+  const mp = document.getElementById('marketPrices');
+  mp.innerHTML = RESOURCES.map(r=>`<div class="stat"><strong>${r}</strong><br><small>$${state.market[r]}/unit</small></div>`).join('');
+}
+function renderResourceTotals(c){
+  const div = document.getElementById('resourceTotals');
+  div.innerHTML = RESOURCES.map(r=>`<div class="row"><strong>${r}</strong> <small>${Math.round(c.stock[r]||0)} units</small></div>`).join('');
+}
+function renderTradeUI(){
+  const me = state.countries.get(state.playerId);
+  const sel = document.getElementById('tradePartner'); sel.innerHTML='';
+  // partners: all others
+  [...state.countries.values()].filter(x=>String(x.id)!==String(state.playerId)).sort((a,b)=>a.name.localeCompare(b.name))
+    .forEach(c=>{
+      const o = document.createElement('option'); o.value=c.id; o.textContent=c.name; sel.appendChild(o);
+    });
+  updateRelationHint();
+}
+function updateRelationHint(){
+  const partner = document.getElementById('tradePartner').value;
+  const rel = state.relations.get(keyPair(state.playerId, partner)) ?? 0;
+  const allied = state.alliances.has(keyPair(state.playerId, partner));
+  document.getElementById('relationHint').textContent = `Relation: ${rel} ${allied?'• Allied':''}`;
+}
+document.getElementById('tradePartner').addEventListener('change', updateRelationHint);
+
+function aiAcceptsTrade(sellerId, buyerId, res, amount, pricePerUnit){
+  const buyer = state.countries.get(buyerId);
+  const rel = state.relations.get(keyPair(sellerId, buyerId)) ?? 0;
+  const need = Math.max(0, 100 - (buyer.stock[res]||0)); // rough need
+  const willingPrice = state.market[res] * (1 + (rel/300)) + (need/500); // pay more if friendly or needy
+  return pricePerUnit <= willingPrice;
+}
+
+document.getElementById('sellBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const partnerId = document.getElementById('tradePartner').value;
+  const res = document.getElementById('tradeResource').value;
+  const amt = Math.max(1, +document.getElementById('tradeAmount').value || 1);
+
+  if((me.stock[res]||0) < amt){ log('<span class="danger">You lack enough stock to sell.</span>'); return; }
+  const price = state.market[res] * (state.alliances.has(keyPair(state.playerId, partnerId)) ? 1.1 : 1.0);
+  if(!aiAcceptsTrade(state.playerId, partnerId, res, amt, price)){ log(`<span class="danger">${state.countries.get(partnerId).name} declined your offer.</span>`); return; }
+
+  me.stock[res]-=amt; me.money += price*amt;
+  const partner = state.countries.get(partnerId); partner.stock[res]=(partner.stock[res]||0)+amt; partner.money -= price*amt;
+  bumpRelation(state.playerId, partnerId, +3);
+  log(`Sold ${amt} ${res} to ${partner.name} for ${fmtMoney(price*amt)}.`);
+  renderPanel();
+};
+
+document.getElementById('buyBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const partnerId = document.getElementById('tradePartner').value;
+  const res = document.getElementById('tradeResource').value;
+  const amt = Math.max(1, +document.getElementById('tradeAmount').value || 1);
+
+  const partner = state.countries.get(partnerId);
+  if((partner.stock[res]||0) < amt){ log('<span class="danger">Partner lacks enough stock to sell.</span>'); return; }
+  const price = state.market[res] * (state.alliances.has(keyPair(state.playerId, partnerId)) ? 0.9 : 1.0);
+  if(me.money < price*amt){ log('<span class="danger">You lack the funds.</span>'); return; }
+
+  if(!aiAcceptsTrade(partnerId, state.playerId, res, amt, price)){ log(`<span class="danger">${partner.name} declined to sell.</span>`); return; }
+
+  partner.stock[res]-=amt; partner.money += price*amt;
+  me.stock[res]=(me.stock[res]||0)+amt; me.money -= price*amt;
+  bumpRelation(state.playerId, partnerId, +3);
+  log(`Bought ${amt} ${res} from ${partner.name} for ${fmtMoney(price*amt)}.`);
+  renderPanel();
+};
+
+document.getElementById('allyBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const partnerId = document.getElementById('tradePartner').value;
+  const k = keyPair(state.playerId, partnerId);
+  const rel = state.relations.get(k) ?? 0;
+  if(state.alliances.has(k)){ log('You are already allies.'); return; }
+  if(rel < 20){ log('<span class="danger">Relations not high enough (need 20).</span>'); return; }
+  // 70% accept if rel>=20 (+10 if overallHappiness high)
+  const chance = 0.7 + Math.max(0,(overallHappiness(me)-60))/200;
+  if(Math.random() < chance){
+    state.alliances.add(k);
+    log(`Alliance formed with ${state.countries.get(partnerId).name}! Happiness +2 for both.`);
+    adjustAllRegions(me, +2);
+    adjustAllRegions(state.countries.get(partnerId), +2);
+    bumpRelation(state.playerId, partnerId, +10);
+  }else{
+    bumpRelation(state.playerId, partnerId, -5);
+    log(`<span class="danger">${state.countries.get(partnerId).name} refused your alliance.</span>`);
+  }
+  renderPanel();
+};
+
+function bumpRelation(a,b,delta){
+  const k=keyPair(a,b);
+  const v = state.relations.get(k) ?? 0;
+  state.relations.set(k, clamp(v+delta, -100, 100));
+  updateRelationHint();
+}
+
+function adjustAllRegions(country, delta){
+  country.regions.forEach(r=> r.happiness = clamp(r.happiness + delta, 0, 100));
+}
+
+/* =========================
+   Region overlay (Voronoi inside country)
+   ========================= */
+function clearRegionOverlay(){
+  if(state.regionOverlayG){ state.regionOverlayG.remove(); state.regionOverlayG=null; }
+  d3.select('#clip-country').remove();
+}
+
+function buildRegionOverlay(countryId){
+  clearRegionOverlay();
+  const feature = state.features.find(f=> f.properties.cid===String(countryId));
+  if(!feature) return;
+  const c = state.countries.get(countryId); if(!c) return;
+
+  // Clip path for the country
+  const defs = svg.select('defs').empty() ? svg.append('defs') : svg.select('defs');
+  const clip = defs.append('clipPath').attr('id','clip-country');
+  clip.append('path').attr('d', path(feature));
+
+  // Seeds inside the country
+  const rand = xorshift(+countryId * 1103515245);
+  const bounds = d3.geoBounds(feature);
+  const seeds=[];
+  let tries=0;
+  while(seeds.length < c.regions.length && tries < 10000){
+    tries++;
+    const lon = bounds[0][0] + rand()*(bounds[1][0]-bounds[0][0]);
+    const lat = bounds[0][1] + rand()*(bounds[1][1]-bounds[0][1]);
+    if(d3.geoContains(feature, [lon,lat])){
+      const p = projection([lon,lat]);
+      if(p && isFinite(p[0]) && isFinite(p[1])) seeds.push(p);
+    }
+  }
+  if(seeds.length===0){
+    const cxy = projection(d3.geoCentroid(feature));
+    if(cxy) seeds.push(cxy);
+  }
+
+  // Voronoi cells
+  const D = d3.Delaunay.from(seeds);
+  const V = D.voronoi([0,0,W,H]);
+
+  state.regionOverlayG = g.append('g').attr('class','regions-layer').attr('clip-path','url(#clip-country)');
+
+  const cells = [];
+  for(let i=0;i<seeds.length;i++){
+    const poly = V.cellPolygon(i);
+    if(!poly) continue;
+    cells.push(poly);
+  }
+
+  // draw cells
+  state.regionOverlayG.selectAll('path.region-cell')
+    .data(cells.map((poly,idx)=>({poly, idx})))
+    .enter()
+    .append('path')
+    .attr('class','region-cell')
+    .attr('d', d3.line()(d.poly))
+    .attr('fill', d=> colorForH(c.regions[d.idx] ? c.regions[d.idx].happiness : overallHappiness(c)))
+    .on('click', (_e,d)=>{
+      state.selectedRegionIdx = d.idx;
+      renderPanel(); // sync sidebar and colors
+    })
+    .append('title')
+    .text(d => {
+      const r = c.regions[d.idx];
+      return r ? `${r.name}\nRes: ${r.resource} (prod ${r.production}/t)\nPop: ${r.population.toLocaleString()}\nHappy: ${Math.round(r.happiness)}`
+               : 'Region';
+    });
+
+  highlightSelectedRegionOnMap();
+}
+
+function highlightSelectedRegionOnMap(){
+  if(!state.regionOverlayG) return;
+  state.regionOverlayG.selectAll('path.region-cell')
+    .classed('region-selected', (d)=> d.idx===state.selectedRegionIdx);
+}
+
+/* =========================
+   Player actions + Projects
    ========================= */
 const getPlayer = ()=> state.countries.get(state.playerId);
 
 document.getElementById('investBtn').onclick = ()=>{
   const me = getPlayer(); if(!me) return;
-  const picked = document.querySelector('input[name="regionPick"]:checked');
-  const idx = picked ? +picked.value : 0;
+  const idx = state.selectedRegionIdx || 0;
   if(me.money < 200){ log('<span class="danger">Not enough money to invest.</span>'); return; }
   me.money -= 200;
   me.regions[idx].happiness = clamp(me.regions[idx].happiness + 6, 0, 100);
   log(`Invested in <b>${me.regions[idx].name}</b>: +6 happiness.`);
-  renderPanel();
+  renderPanel(); buildRegionOverlay(state.playerId);
 };
 
 document.getElementById('developAllBtn').onclick = ()=>{
@@ -391,7 +679,7 @@ document.getElementById('developAllBtn').onclick = ()=>{
   me.money -= 400;
   me.regions.forEach(r=> r.happiness = clamp(r.happiness + 2, 0, 100));
   log('Nationwide development: +2 happiness in every region.');
-  renderPanel();
+  renderPanel(); buildRegionOverlay(state.playerId);
 };
 
 document.getElementById('buyMilBtn').onclick = ()=>{
@@ -399,12 +687,12 @@ document.getElementById('buyMilBtn').onclick = ()=>{
   const units = +prompt('How many units? ($50 each)', '5') || 0;
   const cost = units*50;
   if(cost<=0){ return; }
-  if(me.money < cost){ log('<span class="danger">Not enough money for military.</span>'); return; }
+  if(me.money < cost){ log('<span class="danger">You lack the funds.</span>'); return; }
   me.money -= cost; me.military += units;
   const penalty = Math.floor(units/3);
   me.regions.forEach(r=> r.happiness = clamp(r.happiness - penalty, 0, 100));
   log(`Bought ${units} units. National happiness -${penalty}.`);
-  renderPanel();
+  renderPanel(); buildRegionOverlay(state.playerId);
 };
 
 document.getElementById('govSelect').onchange = (e)=>{
@@ -415,50 +703,173 @@ document.getElementById('govSelect').onchange = (e)=>{
   me.regions.forEach(r=> r.happiness = clamp(r.happiness + boost, 0, 100));
   log(`Government changed to <b>${g}</b>. +${boost} happiness in all regions.`);
   e.target.value='';
+  renderPanel(); buildRegionOverlay(state.playerId);
+};
+
+/* Projects UI */
+function renderProjects(){
+  const c = state.countries.get(state.selectedId); if(!c) return;
+  const idx = state.selectedRegionIdx || 0;
+  const r = c.regions[idx];
+  const list = document.getElementById('projectList'); list.innerHTML='';
+  if(r.project){
+    list.innerHTML = `<div class="row"><strong>${r.project.desc}</strong><small>${r.project.durationLeft} turns left</small></div>`;
+  }else{
+    list.innerHTML = `<div class="row"><small>No active project in ${r.name}.</small></div>`;
+  }
+}
+document.getElementById('startProjectBtn').onclick = ()=>{
+  const me = getPlayer(); if(!me) return;
+  const idx = state.selectedRegionIdx || 0;
+  const r = me.regions[idx];
+  if(r.project){ log('<span class="danger">A project is already active in this region.</span>'); return; }
+  if(me.money < 250){ log('<span class="danger">Not enough money ($250) for a project.</span>'); return; }
+  const type = document.getElementById('projectSelect').value;
+  me.money -= 250;
+  if(type==='infra'){ r.project = {type, durationLeft:4, desc:`Infrastructure in ${r.name} (+2 happiness/turn)`}; }
+  if(type==='upgrade'){ r.project = {type, durationLeft:3, desc:`Resource upgrade in ${r.name} (+20% production)`}; }
+  if(type==='culture'){ r.project = {type, durationLeft:2, desc:`Cultural program in ${r.name} (+8 happiness once)`}; }
+  log(`Started project: ${r.project.desc}`);
   renderPanel();
 };
 
 /* =========================
-   AI loop
+   AI loop + Events + Production
    ========================= */
 function aiTurnOne(c){
+  // produce resources
+  for(const r of c.regions){
+    const eff = r.project && r.project.type==='upgrade' ? 1.2 : 1.0;
+    c.stock[r.resource] += r.production * eff;
+  }
+  // run project effects
+  for(const r of c.regions){
+    if(r.project){
+      if(r.project.type==='infra'){ r.happiness = clamp(r.happiness + 2, 0, 100); }
+      if(r.project.type==='culture' && r.project.durationLeft===2){ r.happiness = clamp(r.happiness + 8, 0, 100); }
+      r.project.durationLeft -= 1;
+      if(r.project.durationLeft<=0) r.project=null;
+    }
+  }
+
+  // simple AI: invest if money, sometimes govt change, sometimes buy mil, sometimes trade
   const worst = [...c.regions].sort((a,b)=> a.happiness - b.happiness)[0];
-  if(c.money >= 200){
-    c.money -= 200;
-    worst.happiness = clamp(worst.happiness + 5, 0, 100);
-    return `${c.name} invested in ${worst.name} (+5).`;
+  if(c.money >= 200 && worst.happiness < 80){ c.money -= 200; worst.happiness = clamp(worst.happiness + 5, 0, 100); return `${c.name} invested in ${worst.name} (+5).`; }
+  if(Math.random()<0.12){ const opts=['democracy','socialism','communism']; const g = opts[Math.floor(Math.random()*opts.length)];
+    c.government=g; const boost=g==='democracy'?4:g==='socialism'?3:1; c.regions.forEach(r=>r.happiness=clamp(r.happiness+boost,0,100)); return `${c.name} changed government to ${g} (+${boost}).`; }
+  if(c.money>=150 && Math.random()<0.16){ c.money-=150; c.military+=3; c.regions.forEach(r=>r.happiness=clamp(r.happiness-1,0,100)); return `${c.name} bought military (-1).`; }
+  // sell surplus randomly
+  if(Math.random()<0.25){
+    const res=RESOURCES[Math.floor(Math.random()*RESOURCES.length)];
+    const amt = Math.min(30, c.stock[res]||0);
+    if(amt>0){ c.stock[res]-=amt; c.money += amt*state.market[res]; return `${c.name} sold ${amt} ${res}.`; }
   }
-  if(Math.random()<0.125){
-    const opts=['democracy','socialism','communism'];
-    const g = opts[Math.floor(Math.random()*opts.length)];
-    c.government = g;
-    const boost = g==='democracy'?4 : g==='socialism'?3 : 1;
-    c.regions.forEach(r=> r.happiness = clamp(r.happiness + boost, 0, 100));
-    return `${c.name} changed government to ${g} (+${boost} all).`;
-  }
-  if(c.money >= 150 && Math.random()<0.166){
-    c.money -= 150; c.military += 3;
-    c.regions.forEach(r=> r.happiness = clamp(r.happiness - 1, 0, 100));
-    return `${c.name} bought military (-1 national happiness).`;
-  }
-  c.money += 60;
-  c.regions.forEach(r=>{ r.happiness += (68 - r.happiness)*0.02; });
+  c.money += 80;
   return `${c.name} maintained stability.`;
 }
 
-function tick(){
-  if(!state.running) return;
-  for(const c of state.countries.values()){ c.money += 80; }
-  for(const c of state.countries.values()){
-    if(String(c.id)!==String(state.playerId)){
-      const msg = aiTurnOne(c);
-      if(Math.random()<0.3) log(msg);
+function playerProductionAndProjects(){
+  const me = getPlayer(); if(!me) return;
+  for(const r of me.regions){
+    const eff = r.project && r.project.type==='upgrade' ? 1.2 : 1.0;
+    me.stock[r.resource] += r.production * eff;
+  }
+  for(const r of me.regions){
+    if(r.project){
+      if(r.project.type==='infra'){ r.happiness = clamp(r.happiness + 2, 0, 100); }
+      if(r.project.type==='culture' && r.project.durationLeft===2){ r.happiness = clamp(r.happiness + 8, 0, 100); }
+      r.project.durationLeft -= 1;
+      if(r.project.durationLeft<=0) r.project=null;
     }
   }
+}
+
+/* Random Events */
+function maybeEvent(){
+  state.turn++;
+  const banner = document.getElementById('eventBanner');
+  banner.style.display='none';
+  if(state.turn % 3 !== 0) return; // every 3 turns on average
+
+  const roll = Math.random();
+  let msg='';
+  if(roll < 0.25){
+    // Global boom or slump
+    const boom = Math.random()<0.5;
+    for(const c of state.countries.values()){
+      if(boom){ c.money += 200; adjustAllRegions(c, +1); }
+      else { c.money = Math.max(0, c.money - 150); adjustAllRegions(c, -1); }
+    }
+    msg = boom ? 'Global Economic Boom! +$200 and +1 happiness everywhere.' :
+                 'Global Recession. -$150 and -1 happiness everywhere.';
+  } else if(roll < 0.6){
+    // Local disaster in random country/region
+    const keys=[...state.countries.keys()];
+    const victimId = keys[Math.floor(Math.random()*keys.length)];
+    const v = state.countries.get(victimId);
+    const idx = Math.floor(Math.random()*v.regions.length);
+    const r = v.regions[idx];
+    r.happiness = clamp(r.happiness - 12, 0, 100);
+    r.population = Math.max(1000, Math.round(r.population*0.98));
+    msg = `Disaster in ${r.name}! -12 happiness, -2% population.`;
+  } else {
+    // Cultural festival in random ally pair (or random country if none)
+    if(state.alliances.size>0){
+      const any = [...state.alliances][Math.floor(Math.random()*state.alliances.size)].split('|');
+      const a = state.countries.get(any[0]), b = state.countries.get(any[1]);
+      adjustAllRegions(a, +3); adjustAllRegions(b, +3);
+      msg = `Alliance Cultural Festival in ${a.name} & ${b.name}! +3 happiness in both.`;
+    } else {
+      const keys=[...state.countries.keys()];
+      const id = keys[Math.floor(Math.random()*keys.length)];
+      const c = state.countries.get(id);
+      adjustAllRegions(c, +4);
+      msg = `World Expo hosted by ${c.name}! +4 happiness nationwide.`;
+    }
+  }
+  banner.textContent = 'Event: ' + msg;
+  banner.style.display = 'block';
+  log(`<strong>Event:</strong> ${msg}`);
+}
+
+/* Master tick */
+function tick(){
+  if(!state.running) return;
+
+  // production & projects
+  playerProductionAndProjects();
+  for(const c of state.countries.values()){
+    if(String(c.id)!==String(state.playerId)) aiTurnOne(c);
+  }
+
+  // market drift, events, AI trades among themselves (simple)
+  refreshMarket();
+  maybeEvent();
+  if(Math.random()<0.25) aiIntertrade();
+
+  // redraw
   redrawCountries();
   updateLeaderboard();
   renderPanel();
+  if(state.selectedId) buildRegionOverlay(state.selectedId);
+
   setTimeout(tick, state.tickMs);
+}
+
+function aiIntertrade(){
+  // pick two random countries and move small amounts at market price
+  const ids = [...state.countries.keys()];
+  if(ids.length<2) return;
+  const a = state.countries.get(ids[Math.floor(Math.random()*ids.length)]);
+  const b = state.countries.get(ids[Math.floor(Math.random()*ids.length)]);
+  if(a.id===b.id) return;
+  const res = RESOURCES[Math.floor(Math.random()*RESOURCES.length)];
+  const amt = Math.min(20, a.stock[res]||0);
+  if(amt<=0) return;
+  const price = state.market[res];
+  a.stock[res]-=amt; a.money += amt*price;
+  b.stock[res]=(b.stock[res]||0)+amt; b.money -= amt*price;
+  bumpRelation(a.id, b.id, +2);
 }
 
 /* =========================
@@ -466,11 +877,18 @@ function tick(){
    ========================= */
 document.getElementById('saveBtn').onclick = ()=>{
   const payload = {
-    version: 1,
+    version: 3,
     playerId: state.playerId,
+    selectedId: state.selectedId,
+    selectedRegionIdx: state.selectedRegionIdx,
+    turn: state.turn,
+    market: state.market,
+    alliances: [...state.alliances],
+    relations: [...state.relations.entries()],
     data: [...state.countries.entries()].map(([id,c])=>[String(id),{
       id:String(c.id), name:c.name, money:c.money, military:c.military, government:c.government, isAI:c.isAI,
-      regions: c.regions.map(r=>({name:r.name, population:r.population, happiness:r.happiness}))
+      stock:c.stock,
+      regions: c.regions.map(r=>({name:r.name, population:r.population, happiness:r.happiness, resource:r.resource, production:r.production, project:r.project}))
     }])
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -483,13 +901,20 @@ document.getElementById('loadBtn').onclick = ()=>{
   try{
     const payload = JSON.parse(raw);
     state.playerId = payload.playerId ? String(payload.playerId) : null;
+    state.selectedId = payload.selectedId ? String(payload.selectedId) : null;
+    state.selectedRegionIdx = payload.selectedRegionIdx || 0;
+    state.turn = payload.turn || 0;
+    state.market = payload.market || state.market;
+    state.alliances = new Set(payload.alliances || []);
+    state.relations = new Map(payload.relations || []);
     state.countries.clear();
     for(const [id,c] of payload.data){ state.countries.set(String(id), c); }
     populateSelector();
     state.running = true;
-    const selectId = state.playerId || [...state.countries.keys()][0];
+    const selectId = state.selectedId || state.playerId || [...state.countries.keys()][0];
     selectCountry(selectId, true);
     updateLeaderboard();
+    refreshMarket();
     log('Game loaded.');
   }catch(e){ console.error(e); log('<span class="danger">Failed to load save.</span>'); }
 };
