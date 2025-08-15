@@ -119,27 +119,27 @@
 
 <script>
 /* =========================
-   Robust loaders & helpers
+   Helpers & deterministic RNG
    ========================= */
 const STORAGE_KEY = 'whc_v1_save';
 
 const fmtMoney = (v)=>'$'+Math.round(v).toLocaleString();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
-// deterministic RNG per country id
-function xorshift(seed) {
-  let x = seed >>> 0;
-  return function() { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x>>>0)/4294967296); }
-}
+function xorshift(seed) { let x = seed >>> 0; return function(){ x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x>>>0)/4294967296); } }
 function pickWeightedDirichlet(rand, n) {
   const arr = Array.from({length:n}, () => -Math.log(1 - rand()));
   const sum = arr.reduce((a,b)=>a+b,0);
   return arr.map(v=>v/sum);
 }
 
+/* =========================
+   Game state
+   ========================= */
 const state = {
   countries: new Map(), // id(string)-> country obj
   features: [],
+  landFeature: null,
   playerId: null,
   selectedId: null,
   tickMs: 6000,
@@ -153,24 +153,40 @@ function overallHappiness(c){
 }
 function colorForH(h){ return d3.interpolateRdYlGn(clamp(h/100,0,1)); }
 
-/* ===========
-   Map plumbing
-   =========== */
+/* =========================
+   Map setup
+   ========================= */
 const mapEl = d3.select('#map');
 let W=0,H=0, svg, g, projection, path;
+let oceanPath, landPath;
 
 function sizeMap(){
   W = mapEl.node().getBoundingClientRect().width || 800;
   H = document.getElementById('mapWrap').getBoundingClientRect().height || 500;
+
   if(!svg){
     svg = mapEl.append('svg');
-    g = svg.append('g');
-    svg.append('path').attr('class','ocean').attr('fill','#87b7e9').attr('stroke','none');
+    g = svg.append('g');            // everything (ocean, land, countries) inside g so zoom works
+
+    oceanPath = g.append('path')    // ocean INSIDE g
+      .attr('class','ocean')
+      .attr('fill','#87b7e9')
+      .attr('stroke','none');
+
+    landPath = g.append('path')     // base land under countries
+      .attr('class','land')
+      .attr('fill','#dfe8c5')
+      .attr('stroke','#1b1f39')
+      .attr('stroke-width',0.3);
   }
+
   svg.attr('viewBox', `0 0 ${W} ${H}`);
   projection = d3.geoNaturalEarth1().fitSize([W, H], {type:"Sphere"});
   path = d3.geoPath(projection);
-  svg.select('path.ocean').attr('d', path({type:'Sphere'}));
+
+  oceanPath.attr('d', path({type:'Sphere'}));
+  if(state.landFeature) landPath.attr('d', path(state.landFeature));
+
   redrawCountries();
 }
 window.addEventListener('resize', sizeMap);
@@ -188,22 +204,26 @@ async function loadNames() {
       const r = await fetch(u, {cache:'force-cache'});
       if (!r.ok) continue;
       const tsv = await r.text();
-      const rows = d3.tsvParse(tsv); // robust tsv parser
+      const rows = d3.tsvParse(tsv);
       const map = new Map();
       rows.forEach(row=>{
         const idNum = +row.id;
         if(!isNaN(idNum)) map.set(idNum, row.name);
       });
       if(map.size) return map;
-    } catch(_) {}
+    } catch(_){}
   }
-  return new Map(); // fallback
+  return new Map();
 }
 
 async function initWorld(){
   sizeMap();
-  const topology = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
-  const nameMap = await loadNames();
+
+  const [topology, landTopo, nameMap] = await Promise.all([
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json()),
+    fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json').then(r=>r.json()),
+    loadNames()
+  ]);
 
   state.features = topojson.feature(topology, topology.objects.countries).features.map(f=>{
     const idNum = +f.id;
@@ -212,6 +232,8 @@ async function initWorld(){
     f.properties = { ...f.properties, name, cid };
     return f;
   });
+
+  state.landFeature = topojson.feature(landTopo, landTopo.objects.land);
 
   // init countries
   state.countries.clear();
@@ -244,30 +266,31 @@ async function initWorld(){
   log(`World ready: ${state.countries.size} countries.`);
 }
 
-/* =========================
-   Draw / update the countries
-   ========================= */
 function redrawCountries(){
   if(!state.features.length || !path) return;
-  const land = g ? g.selectAll('path.country').data(state.features, d=>d.properties.cid) : null;
-  if(!land) return;
 
-  const enter = land.enter().append('path')
+  // keep ocean/land synced to projection
+  oceanPath.attr('d', path({type:'Sphere'}));
+  if(state.landFeature) landPath.attr('d', path(state.landFeature));
+
+  const sel = g.selectAll('path.country').data(state.features, d=>d.properties.cid);
+
+  const enter = sel.enter().append('path')
     .attr('class','country')
     .attr('d', path)
     .attr('stroke','#1b1f39')
     .attr('stroke-width',0.5)
     .on('click', (_e,d)=> selectCountry(d.properties.cid, true));
 
-  g.selectAll('path.country').selectAll('title').data(d => [d]).join('title').text(d => d.properties.name);
+  g.selectAll('path.country').selectAll('title')
+    .data(d => [d]).join('title').text(d => d.properties.name);
 
-  land.merge(enter)
-    .attr('fill', d => {
-      const c = state.countries.get(d.properties.cid);
-      return colorForH(overallHappiness(c || {regions:[]}));
-    });
+  sel.merge(enter).attr('fill', d => {
+    const c = state.countries.get(d.properties.cid);
+    return colorForH(overallHappiness(c || {regions:[]}));
+  });
 
-  land.exit().remove();
+  sel.exit().remove();
 }
 
 function zoomToFeature(f){
@@ -462,7 +485,6 @@ document.getElementById('loadBtn').onclick = ()=>{
     state.playerId = payload.playerId ? String(payload.playerId) : null;
     state.countries.clear();
     for(const [id,c] of payload.data){ state.countries.set(String(id), c); }
-    // keep existing features (geometry), just re-render
     populateSelector();
     state.running = true;
     const selectId = state.playerId || [...state.countries.keys()][0];
