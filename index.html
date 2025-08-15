@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>World Happiness Conquest — Tabs Update</title>
+<title>World Happiness Conquest — Tabs + Hotkeys + MYOC Features</title>
 <style>
   :root { --bg:#0f1220; --card:#171a2b; --ink:#e8ecff; --muted:#aeb7d9; --accent:#7bd389; --bad:#ef6a6a; --gold:#ffd34d; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial; }
@@ -64,7 +64,7 @@
 <body>
 <header>
   <h1>World Happiness Conquest — Tabs Update</h1>
-  <span class="small">Win by highest population-weighted happiness. Now with tabs, conscription, research, budget, gifts & more.</span>
+  <span class="small">Win by highest population-weighted happiness. Tabs, hotkeys, conscription, research, budget, gifts & more.</span>
 </header>
 
 <div id="app">
@@ -103,7 +103,7 @@
 
     <div class="pad">
       <div class="statrow" id="leaderboard"></div>
-      <p class="hint">Click a country to zoom and reveal its regions. Click a region to select it. Buildings are draggable when “Move buildings” is on.</p>
+      <p class="hint">Click a country to zoom and reveal its regions. Click a region to select it. Buildings are draggable when “Move buildings” is on. Hotkeys: 1–8 tabs, ←/→ cycle.</p>
     </div>
   </div>
 
@@ -123,14 +123,14 @@
 
         <!-- Tabs -->
         <div class="tabs" id="tabs">
-          <button class="tabbtn active" data-tab="tab-overview">Overview</button>
-          <button class="tabbtn" data-tab="tab-regions">Regions</button>
-          <button class="tabbtn" data-tab="tab-projects">Projects/Buildings</button>
-          <button class="tabbtn" data-tab="tab-economy">Economy/Budget</button>
-          <button class="tabbtn" data-tab="tab-research">Research</button>
-          <button class="tabbtn" data-tab="tab-diplomacy">Diplomacy/Trade</button>
-          <button class="tabbtn" data-tab="tab-military">Military/War</button>
-          <button class="tabbtn" data-tab="tab-log">Events/Log</button>
+          <button class="tabbtn active" data-tab="tab-overview"   data-hotkey="1">1· Overview</button>
+          <button class="tabbtn"          data-tab="tab-regions"   data-hotkey="2">2· Regions</button>
+          <button class="tabbtn"          data-tab="tab-projects"  data-hotkey="3">3· Projects/Buildings</button>
+          <button class="tabbtn"          data-tab="tab-economy"   data-hotkey="4">4· Economy/Budget</button>
+          <button class="tabbtn"          data-tab="tab-research"  data-hotkey="5">5· Research</button>
+          <button class="tabbtn"          data-tab="tab-diplomacy" data-hotkey="6">6· Diplomacy/Trade</button>
+          <button class="tabbtn"          data-tab="tab-military"  data-hotkey="7">7· Military/War</button>
+          <button class="tabbtn"          data-tab="tab-log"       data-hotkey="8">8· Events/Log</button>
         </div>
 
         <!-- TAB: Overview -->
@@ -314,7 +314,10 @@ const state = {
   regionOverlayG: null,
   buildingsG: null,
   placingBuilding: null,
-  movingBuildings: false
+  movingBuildings: false,
+
+  // conquered region overlays
+  annexOverlays: [] // [{ownerId, ownerName, polygon:[[x,y],...]}]
 };
 
 /* =========================
@@ -344,6 +347,7 @@ function sizeMap(){
   if(state.landFeature) landPath.attr('d', path(state.landFeature));
   redrawCountries();
   drawAllianceLines();
+  drawAnnexOverlays();
   if(state.selectedId){ buildRegionOverlay(state.selectedId); drawBuildings(); }
 }
 window.addEventListener('resize', sizeMap);
@@ -420,30 +424,50 @@ function drawAllianceLines(){
     .attr('x2',d=>d.pb[0]).attr('y2',d=>d.pb[1]);
 }
 
-function zoomToFeature(f, cb){
-  const b = path.bounds(f);
-  const dx = b[1][0]-b[0][0], dy=b[1][1]-b[0][1];
-  const x = (b[0][0]+b[1][0])/2, y=(b[0][1]+b[1][1])/2;
-  const scale = Math.max(1, Math.min(8, 0.9/Math.max(dx/W, dy/H)));
-  const translate = [W/2 - scale*x, H/2 - scale*y];
-  g.transition().duration(700).attr('transform', `translate(${translate}) scale(${scale})`).on('end', ()=> cb && cb());
-}
-document.getElementById('resetViewBtn').onclick = ()=>{
-  g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
-  clearRegionOverlay(); clearBuildings();
-};
-
 /* =========================
-   Tabs
+   Tabs + Hotkeys
    ========================= */
 const tabsEl = document.getElementById('tabs');
+const TAB_ORDER = [
+  'tab-overview','tab-regions','tab-projects','tab-economy',
+  'tab-research','tab-diplomacy','tab-military','tab-log'
+];
+function setActiveTabById(id){
+  [...tabsEl.querySelectorAll('.tabbtn')].forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab === id);
+  });
+  document.querySelectorAll('.tabpane').forEach(p=>{
+    p.classList.toggle('active', p.id === id);
+  });
+}
+function getActiveTabIndex(){
+  const btn = tabsEl.querySelector('.tabbtn.active');
+  const id = btn?.dataset.tab;
+  return Math.max(0, TAB_ORDER.indexOf(id));
+}
 tabsEl?.addEventListener('click', (e)=>{
   const btn = e.target.closest('.tabbtn'); if(!btn) return;
-  [...tabsEl.querySelectorAll('.tabbtn')].forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  const id = btn.dataset.tab;
-  document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
-  document.getElementById(id)?.classList.add('active');
+  setActiveTabById(btn.dataset.tab);
+});
+document.addEventListener('keydown', (e)=>{
+  const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+
+  const n = parseInt(e.key, 10);
+  if (!isNaN(n) && n >= 1 && n <= TAB_ORDER.length){
+    e.preventDefault();
+    setActiveTabById(TAB_ORDER[n-1]);
+    return;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+    e.preventDefault();
+    const idx = getActiveTabIndex();
+    const next = (e.key === 'ArrowRight')
+      ? (idx + 1) % TAB_ORDER.length
+      : (idx - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    setActiveTabById(TAB_ORDER[next]);
+  }
 });
 
 /* =========================
@@ -545,6 +569,7 @@ async function initWorld(){
    Overlay: Regions (Voronoi) & Buildings
    ========================= */
 function clearRegionOverlay(){ if(state.regionOverlayG){ state.regionOverlayG.remove(); state.regionOverlayG=null; } d3.select('#clip-country').remove(); }
+
 function buildRegionOverlay(countryId){
   clearRegionOverlay();
   const feature = state.features.find(f=> f.properties.cid===String(countryId));
@@ -600,6 +625,12 @@ function buildRegionOverlay(countryId){
   highlightSelectedRegionOnMap();
 }
 
+function highlightSelectedRegionOnMap(){
+  if(!state.regionOverlayG) return;
+  state.regionOverlayG.selectAll('path.region-cell')
+    .classed('region-selected', (d)=> d.idx===state.selectedRegionIdx);
+}
+
 function clearBuildings(){ if(state.buildingsG){ state.buildingsG.remove(); state.buildingsG=null; } }
 function drawBuildings(){
   clearBuildings();
@@ -633,7 +664,7 @@ function drawBuildings(){
       g.append('rect').attr('class','chimney').attr('x',18).attr('y',2).attr('width',6).attr('height',8);
     } else if(d.type==='hospital'){
       g.append('rect').attr('class','body').attr('x',2).attr('y',6).attr('width',28).attr('height',18);
-      g.append('rect').attr('class','cross').attr('x',14).attr('y',2).attr('width',4).attr('height',16);
+      g.append('rect').attr('class','cross').attr('x',14).attr('y',2).attr('width',4').attr('height',16);
       g.append('rect').attr('class','cross').attr('x',10).attr('y',6).attr('width',12).attr('height',4);
     } else if(d.type==='school'){
       g.append('polygon').attr('class','roof').attr('points','0,8 15,0 30,8');
@@ -643,6 +674,59 @@ function drawBuildings(){
       g.append('rect').attr('class','body').attr('x',2).attr('y',8).attr('width',28).attr('height',16);
     }
   });
+}
+
+/* =========================
+   Conquered region overlays (visual annex)
+   ========================= */
+function drawAnnexOverlays(){
+  let layer = g.select('g.annex-layer');
+  if (layer.empty()) layer = g.append('g').attr('class','annex-layer');
+  layer.selectAll('path').remove();
+  if(!state.annexOverlays.length) return;
+  layer.selectAll('path')
+    .data(state.annexOverlays)
+    .enter().append('path')
+    .attr('d', d => d3.line()(d.polygon))
+    .attr('fill', d => {
+      const me = state.countries.get(d.ownerId);
+      const h = me ? overallHappiness(me) : 70;
+      const col = d3.color(colorForH(h));
+      col.opacity = 0.35;
+      return col;
+    })
+    .attr('stroke', '#ffd34d')
+    .attr('stroke-width', 1.2)
+    .append('title').text(d=>`Owned by ${d.ownerName}`);
+}
+// Deterministic Voronoi cells for a country (screen polys)
+function computeRegionCells(countryId, regionCount){
+  const feature = state.features.find(f=> f.properties.cid===String(countryId));
+  if(!feature) return [];
+  const bounds = d3.geoBounds(feature);
+  const rand = xorshift(+countryId * 1103515245);
+  const seeds=[]; let tries=0;
+  while(seeds.length < regionCount && tries < 10000){
+    tries++;
+    const lon = bounds[0][0] + rand()*(bounds[1][0]-bounds[0][0]);
+    const lat = bounds[0][1] + rand()*(bounds[1][1]-bounds[0][1]);
+    if(d3.geoContains(feature, [lon,lat])){
+      const p = projection([lon,lat]);
+      if(p && isFinite(p[0]) && isFinite(p[1])) seeds.push(p);
+    }
+  }
+  if(seeds.length===0){
+    const cxy = projection(d3.geoCentroid(feature));
+    if(cxy) seeds.push(cxy);
+  }
+  const D = d3.Delaunay.from(seeds);
+  const V = D.voronoi([0,0,W,H]);
+  const cells=[];
+  for(let i=0;i<seeds.length;i++){
+    const poly = V.cellPolygon(i);
+    if(poly) cells.push(poly);
+  }
+  return cells;
 }
 
 /* =========================
@@ -682,6 +766,22 @@ document.getElementById('startBtn').onclick = ()=>{
 
 document.getElementById('colorMode').onchange = (e)=>{ state.colorMode = e.target.value; redrawCountries(); };
 document.getElementById('showAllyLines').onchange = (e)=>{ state.showAllyLines = e.target.checked; drawAllianceLines(); };
+
+/* =========================
+   Zoom helpers
+   ========================= */
+function zoomToFeature(f, cb){
+  const b = path.bounds(f);
+  const dx = b[1][0]-b[0][0], dy=b[1][1]-b[0][1];
+  const x = (b[0][0]+b[1][0])/2, y=(b[0][1]+b[1][1])/2;
+  const scale = Math.max(1, Math.min(8, 0.9/Math.max(dx/W, dy/H)));
+  const translate = [W/2 - scale*x, H/2 - scale*y];
+  g.transition().duration(700).attr('transform', `translate(${translate}) scale(${scale})`).on('end', ()=> cb && cb());
+}
+document.getElementById('resetViewBtn').onclick = ()=>{
+  g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
+  clearRegionOverlay(); clearBuildings();
+};
 
 function renderPanel(){
   const panel = document.getElementById('countryStats');
@@ -926,6 +1026,10 @@ document.getElementById('attackBtn').onclick = ()=>{
   if(myPower <= 0){ log('<span class="danger">No troops in the selected region.</span>'); return; }
   const roll = (myPower + (Math.random()*6)) - (enemyPower + (Math.random()*6));
   if(roll > 0){
+    // Snapshot conquered polygon BEFORE removing region
+    const enemyCells = computeRegionCells(enemyId, enemy.regions.length);
+    const conqueredPoly = enemyCells[eIdx] || null;
+
     const taken = enemy.regions.splice(eIdx,1)[0];
     taken.happiness = clamp(taken.happiness - 10, 0, 100);
     const newTroops = Math.max(1, Math.floor(myPower*0.5));
@@ -935,6 +1039,13 @@ document.getElementById('attackBtn').onclick = ()=>{
     enemy.military = Math.max(0, enemy.military - 5);
     me.military = Math.max(0, me.military - 3);
     adjustAllRegions(enemy, -2);
+
+    // Visual annex overlay
+    if(conqueredPoly){
+      state.annexOverlays.push({ ownerId: state.playerId, ownerName: me.name, polygon: conqueredPoly });
+      drawAnnexOverlays();
+    }
+
     log(`<strong>Victory!</strong> You captured ${taken.name} from ${enemy.name}.`);
   }else{
     myRegion.troops = Math.max(0, myRegion.troops - Math.ceil(enemyPower*0.5));
@@ -1094,17 +1205,15 @@ function aiTurnOne(c){
       if(r.project.durationLeft<=0) r.project=null;
     }
   }
-  // simple AI budget/conscription drift
+  // simple AI policy drift & actions
   c.money += 80;
   if(Math.random()<0.2){ c.conscription = clamp((c.conscription + (Math.random()<0.5?-1:1)),0,2); }
   if(Math.random()<0.2){ c.budget.welfare = clamp(c.budget.welfare + (Math.random()<0.5?-10:10),0,100); }
-  // behavior
   const worst = [...c.regions].sort((a,b)=> a.happiness - b.happiness)[0];
   if(c.money >= 200 && worst.happiness < 80){ c.money -= 200; worst.happiness = clamp(worst.happiness + 5, 0, 100); return `${c.name} invested in ${worst.name} (+5).`; }
   if(Math.random()<0.12){ const opts=['democracy','socialism','communism']; const g = opts[Math.floor(Math.random()*opts.length)];
     c.government=g; const boost=g==='democracy'?4:g==='socialism'?3:1; c.regions.forEach(r=>r.happiness=clamp(r.happiness+boost,0,100)); return `${c.name} changed government to ${g} (+${boost}).`; }
   if(c.money>=150 && Math.random()<0.16){ c.money-=150; c.military+=3; c.regions.forEach(r=>r.happiness=clamp(r.happiness-1,0,100)); return `${c.name} bought military (-1).`; }
-  // intertrade
   if(Math.random()<0.25){
     const res=RESOURCES[Math.floor(Math.random()*RESOURCES.length)];
     const amt = Math.min(30, c.stock[res]||0);
@@ -1184,6 +1293,7 @@ function tick(){
   if(Math.random()<0.25) aiIntertrade();
 
   redrawCountries();
+  drawAnnexOverlays();
   updateLeaderboard();
   renderPanel();
   if(state.selectedId){ buildRegionOverlay(state.selectedId); }
@@ -1198,7 +1308,7 @@ const slotSel = document.getElementById('saveSlot');
 function currentKey(){ return STORAGE_KEY_BASE + (slotSel.value || '1'); }
 document.getElementById('saveBtn').onclick = ()=>{
   const payload = {
-    version: 5,
+    version: 6,
     playerId: state.playerId,
     selectedId: state.selectedId,
     selectedRegionIdx: state.selectedRegionIdx,
@@ -1207,6 +1317,7 @@ document.getElementById('saveBtn').onclick = ()=>{
     alliances: [...state.alliances],
     wars: [...state.wars],
     relations: [...state.relations.entries()],
+    annexOverlays: state.annexOverlays,
     data: [...state.countries.entries()].map(([id,c])=>[String(id),{
       id:String(c.id), name:c.name, money:c.money, military:c.military, government:c.government, isAI:c.isAI,
       stock:c.stock, buildings:c.buildings,
@@ -1230,13 +1341,14 @@ document.getElementById('loadBtn').onclick = ()=>{
     state.alliances = new Set(payload.alliances || []);
     state.wars = new Set(payload.wars || []);
     state.relations = new Map(payload.relations || []);
+    state.annexOverlays = payload.annexOverlays || [];
     state.countries.clear();
     for(const [id,c] of payload.data){ state.countries.set(String(id), c); }
     populateSelector();
     state.running = true;
     const selectId = state.selectedId || state.playerId || [...state.countries.keys()][0];
     selectCountry(selectId, true);
-    updateLeaderboard(); refreshMarket(); drawAllianceLines(); renderResearchList();
+    updateLeaderboard(); refreshMarket(); drawAllianceLines(); renderResearchList(); drawAnnexOverlays();
     log(`Loaded from slot ${slotSel.value}.`);
   }catch(e){ console.error(e); log('<span class="danger">Failed to load save.</span>'); }
 };
