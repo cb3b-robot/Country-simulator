@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>World Happiness Conquest — Grand Update</title>
+<title>World Happiness Conquest — Tabs Update</title>
 <style>
   :root { --bg:#0f1220; --card:#171a2b; --ink:#e8ecff; --muted:#aeb7d9; --accent:#7bd389; --bad:#ef6a6a; --gold:#ffd34d; }
   html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,Arial; }
@@ -28,10 +28,10 @@
   .list { display:grid; gap:8px; max-height:220px; overflow:auto; }
   .row { display:flex; align-items:center; justify-content:space-between; gap:8px; background:#1b1f39; border:1px solid #2c335d; border-radius:10px; padding:8px 10px; }
   .row small { color:var(--muted); }
-  .row input[type="range"]{ width:120px; }
+  .row input[type="range"]{ width:140px; }
   .legend { display:flex; align-items:center; gap:6px; }
   .swatch { width:16px; height:10px; border-radius:3px; border:1px solid #0006}
-  .log { height:130px; overflow:auto; background:#101328; border:1px solid #24284a; border-radius:10px; padding:8px 10px; font-size:13px }
+  .log { height:180px; overflow:auto; background:#101328; border:1px solid #24284a; border-radius:10px; padding:8px 10px; font-size:13px }
   .hint { color:var(--muted); font-size:12px; }
   .leader { font-weight:600; color:var(--accent) }
   .danger { color:var(--bad) }
@@ -43,21 +43,28 @@
   .region-selected { stroke:var(--gold) !important; stroke-width:2 !important; }
   /* alliance lines */
   .ally-line { stroke:#ffd34d; stroke-width:1.6; stroke-dasharray:4 4; opacity:.9; pointer-events:none; }
-  /* buildings (simple 3D-ish) */
+  /* buildings */
   .building { cursor:grab; pointer-events:all; }
   .building:active { cursor:grabbing; }
-  .house .roof { fill:#e86c5b; }
-  .house .wall { fill:#f1d8c9; }
-  .factory .body { fill:#b8c1d1; }
-  .factory .chimney { fill:#8d96a5; }
+  .house .roof { fill:#e86c5b; } .house .wall { fill:#f1d8c9; }
+  .factory .body { fill:#b8c1d1; } .factory .chimney { fill:#8d96a5; }
+  .hospital .cross { fill:#ef6a6a; } .hospital .body { fill:#e3f2ff; }
+  .school .body { fill:#ffe2b6; } .school .roof { fill:#c77d3c; }
+  .barracks .body { fill:#8aa17a; } .barracks .roof { fill:#5e6d56; }
   .subgrid { display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
   @media (max-width: 560px){ .subgrid { grid-template-columns: 1fr; } }
+  /* tabs */
+  .tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+  .tabbtn { background:#1b1f39; border:1px solid #2c335d; color:var(--ink); padding:8px 10px; border-radius:10px; cursor:pointer; }
+  .tabbtn.active { border-color:#ffd34d; box-shadow:0 0 0 1px #ffd34d inset; }
+  .tabpane { display:none; }
+  .tabpane.active { display:block; }
 </style>
 </head>
 <body>
 <header>
-  <h1>World Happiness Conquest — Grand Update</h1>
-  <span class="small">Win by highest population-weighted happiness. With War, Alliances, Money map, Troops, Buildings, Trade & Events.</span>
+  <h1>World Happiness Conquest — Tabs Update</h1>
+  <span class="small">Win by highest population-weighted happiness. Now with tabs, conscription, research, budget, gifts & more.</span>
 </header>
 
 <div id="app">
@@ -100,12 +107,12 @@
     </div>
   </div>
 
-  <!-- RIGHT PANEL -->
+  <!-- RIGHT PANEL (TABS) -->
   <div class="panel">
     <div class="pad">
       <h2 id="panelTitle">No country selected</h2>
       <div id="countryStats" style="display:none">
-
+        <!-- Header stats -->
         <div class="statrow">
           <div class="stat">Overall Happiness: <strong id="overallH"></strong></div>
           <div class="stat">Money: <strong id="money"></strong></div>
@@ -114,90 +121,142 @@
           <span class="pill" id="playerTag" style="display:none">You</span>
         </div>
 
-        <!-- Resources & Trade/Diplomacy -->
-        <div class="subgrid">
-          <div>
-            <h3>Resources & Market</h3>
-            <div class="statrow" id="marketPrices"></div>
-            <div class="list" id="resourceTotals"></div>
-          </div>
-          <div>
-            <h3>Trade, Alliance & War</h3>
-            <div class="row">
-              <select id="partnerSelect"></select>
-              <select id="tradeResource">
-                <option value="Food">Food</option><option value="Oil">Oil</option><option value="Tech">Tech</option><option value="Tourism">Tourism</option>
-              </select>
-              <input id="tradeAmount" type="number" min="1" value="10" style="width:80px"/>
-            </div>
-            <div class="controls">
-              <button id="sellBtn">Sell</button>
-              <button id="buyBtn">Buy</button>
-              <button id="allyBtn">Offer Alliance</button>
-            </div>
-            <div class="controls">
-              <button id="declareWarBtn" class="danger">Declare War</button>
-              <button id="attackBtn">Attack Region</button>
-              <button id="peaceBtn">Make Peace</button>
-            </div>
-            <p class="hint" id="relationHint"></p>
-          </div>
+        <!-- Tabs -->
+        <div class="tabs" id="tabs">
+          <button class="tabbtn active" data-tab="tab-overview">Overview</button>
+          <button class="tabbtn" data-tab="tab-regions">Regions</button>
+          <button class="tabbtn" data-tab="tab-projects">Projects/Buildings</button>
+          <button class="tabbtn" data-tab="tab-economy">Economy/Budget</button>
+          <button class="tabbtn" data-tab="tab-research">Research</button>
+          <button class="tabbtn" data-tab="tab-diplomacy">Diplomacy/Trade</button>
+          <button class="tabbtn" data-tab="tab-military">Military/War</button>
+          <button class="tabbtn" data-tab="tab-log">Events/Log</button>
         </div>
 
-        <!-- Actions -->
-        <h3>National Actions</h3>
-        <div class="controls">
-          <button id="developAllBtn">Develop nationwide ($400 → +2 each region)</button>
-          <select id="govSelect">
-            <option value="">Change government…</option>
-            <option value="democracy">Democracy (+5 all regions)</option>
-            <option value="socialism">Socialism (+3 all regions)</option>
-            <option value="communism">Communism (+1 all regions)</option>
-          </select>
-          <button id="buyMilBtn">Buy military ($50/unit → -1 happiness per 3 units)</button>
+        <!-- TAB: Overview -->
+        <div class="tabpane active" id="tab-overview">
+          <div class="row">
+            <div>Goal: Highest population-weighted happiness. Use tabs to manage your country.</div>
+          </div>
+          <div class="controls">
+            <select id="govSelect">
+              <option value="">Change government…</option>
+              <option value="democracy">Democracy (+5 all regions)</option>
+              <option value="socialism">Socialism (+3 all regions)</option>
+              <option value="communism">Communism (+1 all regions)</option>
+            </select>
+            <button id="developAllBtn">Develop nationwide ($400 → +2 each region)</button>
+          </div>
+          <div class="statrow" id="marketPrices"></div>
+          <div class="list" id="resourceTotals"></div>
         </div>
 
-        <!-- Region & Projects -->
-        <div class="subgrid" style="margin-top:10px">
-          <div>
-            <h3>Regions</h3>
-            <div class="list" id="regions"></div>
-            <div class="controls">
-              <input id="troopDelta" type="number" value="5" style="width:80px"/>
-              <button id="assignTroopsBtn">Assign to selected</button>
-              <button id="removeTroopsBtn">Remove from selected</button>
+        <!-- TAB: Regions -->
+        <div class="tabpane" id="tab-regions">
+          <h3>Regions</h3>
+          <div class="list" id="regions"></div>
+        </div>
+
+        <!-- TAB: Projects & Buildings -->
+        <div class="tabpane" id="tab-projects">
+          <div class="subgrid">
+            <div>
+              <h3>Projects</h3>
+              <div class="row">
+                <select id="projectSelect">
+                  <option value="infra">Infrastructure (4 turns • +2 happiness/turn)</option>
+                  <option value="upgrade">Resource Upgrade (3 turns • +20% prod)</option>
+                  <option value="culture">Cultural Program (2 turns • +8 happiness)</option>
+                </select>
+                <button id="startProjectBtn">Start ($250)</button>
+              </div>
+              <div class="list" id="projectList"></div>
             </div>
-            <div class="controls">
-              <button id="addPop50kBtn">Add 50k people ($5k)</button>
-              <button id="addPop200kBtn">Add 200k ($20k)</button>
-            </div>
-          </div>
-          <div>
-            <h3>Region Projects & Buildings</h3>
-            <div class="row">
-              <select id="projectSelect">
-                <option value="infra">Infrastructure (4 turns • +2 happiness/turn)</option>
-                <option value="upgrade">Resource Upgrade (3 turns • +20% prod)</option>
-                <option value="culture">Cultural Program (2 turns • +8 happiness)</option>
-              </select>
-              <button id="startProjectBtn">Start ($250)</button>
-            </div>
-            <div class="row">
-              <select id="buildSelect">
-                <option value="house">Build House ($200)</option>
-                <option value="factory">Build Factory ($400)</option>
-              </select>
-              <button id="placeBuildingBtn">Place on map</button>
+            <div>
+              <h3>Buildings</h3>
+              <div class="row">
+                <select id="buildSelect">
+                  <option value="house">House ($200) — +pop growth</option>
+                  <option value="factory">Factory ($400) — +money (minor -happy)</option>
+                  <option value="hospital">Hospital ($450) — +happiness</option>
+                  <option value="school">School ($350) — +production</option>
+                  <option value="barracks">Barracks ($300) — +troop capacity</option>
+                </select>
+                <button id="placeBuildingBtn">Place on map</button>
+              </div>
               <label class="pill" style="display:flex;gap:6px;align-items:center">
                 <input type="checkbox" id="moveBuildingsToggle"> Move buildings
               </label>
+              <p class="hint">Click inside your zoomed country to place; toggle “Move buildings” to drag.</p>
             </div>
-            <div class="list" id="projectList"></div>
           </div>
         </div>
 
-        <h3>World Log</h3>
-        <div class="log" id="log"></div>
+        <!-- TAB: Economy & Budget -->
+        <div class="tabpane" id="tab-economy">
+          <h3>Budget & Policies</h3>
+          <div class="row">
+            <div><strong>Budget</strong><br/><small>Allocate next-turn effects</small></div>
+            <div>
+              Welfare <input id="budgetWelfare" type="range" min="0" max="100" value="50"> Military <span id="budgetWelfareVal">50</span>%
+            </div>
+          </div>
+          <div class="row">
+            <div><strong>Conscription</strong><br/><small>Troops vs Happiness</small></div>
+            <div>
+              Low <input id="conscription" type="range" min="0" max="2" value="1"> High
+              <span id="conscriptionLabel">Medium</span>
+            </div>
+          </div>
+          <div class="row">
+            <button id="applyBudgetBtn">Apply Policy Changes</button>
+            <span class="hint">Budget & conscription influence income, troop growth and happiness each tick.</span>
+          </div>
+        </div>
+
+        <!-- TAB: Research -->
+        <div class="tabpane" id="tab-research">
+          <h3>Research (one-time unlocks)</h3>
+          <div class="list" id="researchList"></div>
+        </div>
+
+        <!-- TAB: Diplomacy & Trade -->
+        <div class="tabpane" id="tab-diplomacy">
+          <div class="row">
+            <select id="partnerSelect"></select>
+            <select id="tradeResource">
+              <option value="Food">Food</option><option value="Oil">Oil</option><option value="Tech">Tech</option><option value="Tourism">Tourism</option>
+            </select>
+            <input id="tradeAmount" type="number" min="1" value="10" style="width:80px"/>
+          </div>
+          <div class="controls">
+            <button id="sellBtn">Sell</button>
+            <button id="buyBtn">Buy</button>
+            <button id="allyBtn">Offer Alliance</button>
+            <button id="giftMoneyBtn">Send Gift ($500)</button>
+            <button id="giftResBtn">Send 20 Resource</button>
+          </div>
+          <p class="hint" id="relationHint"></p>
+        </div>
+
+        <!-- TAB: Military & War -->
+        <div class="tabpane" id="tab-military">
+          <div class="controls">
+            <input id="troopDelta" type="number" value="5" style="width:80px"/>
+            <button id="assignTroopsBtn">Assign to selected</button>
+            <button id="removeTroopsBtn">Remove from selected</button>
+          </div>
+          <div class="controls">
+            <button id="declareWarBtn" class="danger">Declare War</button>
+            <button id="attackBtn">Attack Region</button>
+            <button id="peaceBtn">Make Peace</button>
+          </div>
+        </div>
+
+        <!-- TAB: Events & Log -->
+        <div class="tabpane" id="tab-log">
+          <div class="log" id="log"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -212,8 +271,14 @@
 /* =========================
    Basics & helpers
    ========================= */
-const STORAGE_KEY_BASE = 'whc_grand_slot_'; // + slot (1..3)
+const STORAGE_KEY_BASE = 'whc_tabs_slot_';
 const RESOURCES = ['Food','Oil','Tech','Tourism'];
+const RESEARCH = [
+  {id:'green', name:'Green Energy', desc:'+5 happiness nationwide', cost:600, apply:(c)=> c.regions.forEach(r=>r.happiness=Math.min(100,r.happiness+5))},
+  {id:'automation', name:'Automation', desc:'+1 production all regions', cost:500, apply:(c)=> c.regions.forEach(r=>r.production+=1)},
+  {id:'logistics', name:'Logistics', desc:'+10% market sale value', cost:500, apply:(c)=> c.researchBuffs.saleBonus=0.1},
+  {id:'civics', name:'Civics Program', desc:'+2 happiness/turn for 3 turns', cost:450, apply:(c)=> c.researchBuffs.happyOverTime=3}
+];
 
 const fmtMoney = (v)=>'$'+Math.round(v).toLocaleString();
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -248,7 +313,7 @@ const state = {
 
   regionOverlayG: null,
   buildingsG: null,
-  placingBuilding: null, // {type:'house'|'factory'}
+  placingBuilding: null,
   movingBuildings: false
 };
 
@@ -265,7 +330,7 @@ function sizeMap(){
 
   if(!svg){
     svg = mapEl.append('svg');
-    g = svg.append('g'); // everything inside g so zoom works
+    g = svg.append('g');
     oceanPath = g.append('path').attr('class','ocean').attr('fill','#87b7e9').attr('stroke','none');
     landPath  = g.append('path').attr('class','land').attr('fill','#dfe8c5').attr('stroke','#1b1f39').attr('stroke-width',0.3);
     allyLinesG = g.append('g').attr('class','ally-lines');
@@ -297,8 +362,7 @@ function colorForMoney(m, min, max){ const t = (m-min)/Math.max(1,(max-min)); re
 function allianceGroups(){
   const ids=[...state.countries.keys()];
   const gmap = new Map(); ids.forEach(id=>gmap.set(id,-1));
-  let gid=0;
-  const adj = new Map(); ids.forEach(id=>adj.set(id,[]));
+  let gid=0; const adj = new Map(); ids.forEach(id=>adj.set(id,[]));
   for(const k of state.alliances){ const [a,b]=k.split('|'); adj.get(a).push(b); adj.get(b).push(a); }
   for(const id of ids){
     if(gmap.get(id)!==-1) continue;
@@ -310,7 +374,7 @@ function allianceGroups(){
 }
 function colorForAlliance(id){
   const {gmap} = allianceGroups();
-  const scheme = d3.schemeSet3; // up to 12 colors
+  const scheme = d3.schemeSet3;
   const group = gmap.get(String(id)) ?? 0;
   return scheme[group % scheme.length];
 }
@@ -368,6 +432,19 @@ document.getElementById('resetViewBtn').onclick = ()=>{
   g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
   clearRegionOverlay(); clearBuildings();
 };
+
+/* =========================
+   Tabs
+   ========================= */
+const tabsEl = document.getElementById('tabs');
+tabsEl?.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.tabbtn'); if(!btn) return;
+  [...tabsEl.querySelectorAll('.tabbtn')].forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const id = btn.dataset.tab;
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+});
 
 /* =========================
    Init world (map + names)
@@ -438,12 +515,17 @@ async function initWorld(){
     state.countries.set(id, {
       id, name,
       money: 1200 + Math.floor(rand()*1500),
-      military: 40 + Math.floor(rand()*80), // unassigned pool
+      military: 40 + Math.floor(rand()*80),
       government: 'democracy',
       regions,
       stock: { Food:0, Oil:0, Tech:0, Tourism:0 },
       isAI: true,
-      buildings: [] // {type:'house'|'factory', x,y, regionIdx}
+      buildings: [],
+      // NEW systems
+      budget: { welfare: 50 },                   // 0..100 (military = 100-welfare)
+      conscription: 1,                           // 0 low, 1 med, 2 high
+      researchDone: {},                          // id->true
+      researchBuffs: { saleBonus:0, happyOverTime:0 } // dynamic buffs
     });
   }
 
@@ -455,6 +537,7 @@ async function initWorld(){
   updateLeaderboard();
   refreshMarket();
   drawAllianceLines();
+  renderResearchList();
   log(`World ready: ${state.countries.size} countries.`);
 }
 
@@ -504,7 +587,7 @@ function buildRegionOverlay(countryId){
     .attr('d', d3.line()(d.poly))
     .attr('fill', d=> colorForH(c.regions[d.idx] ? c.regions[d.idx].happiness : overallHappiness(c)))
     .on('click', (_e,d)=>{
-      state.selectedRegionIdx = d.idx; renderPanel(); // sync sidebar and colors
+      state.selectedRegionIdx = d.idx; renderPanel();
     })
     .append('title')
     .text(d => {
@@ -538,18 +621,27 @@ function drawBuildings(){
     .attr('transform', d=>`translate(${d.x},${d.y})`)
     .call(drag);
 
-  // house icon
-  enter.filter(d=>d.type==='house').each(function(){
+  // sprites
+  enter.each(function(d){
     const g = d3.select(this);
-    g.append('polygon').attr('class','roof').attr('points','0,10 14,0 28,10');
-    g.append('rect').attr('class','wall').attr('x',4).attr('y',10).attr('width',20).attr('height',14);
-  });
-  // factory icon
-  enter.filter(d=>d.type==='factory').each(function(){
-    const g = d3.select(this);
-    g.append('rect').attr('class','body').attr('x',0).attr('y',8).attr('width',30).attr('height',16);
-    g.append('rect').attr('class','chimney').attr('x',6).attr('y',0).attr('width',6).attr('height',10);
-    g.append('rect').attr('class','chimney').attr('x',18).attr('y',2).attr('width',6).attr('height',8);
+    if(d.type==='house'){
+      g.append('polygon').attr('class','roof').attr('points','0,10 14,0 28,10');
+      g.append('rect').attr('class','wall').attr('x',4).attr('y',10).attr('width',20).attr('height',14);
+    } else if(d.type==='factory'){
+      g.append('rect').attr('class','body').attr('x',0).attr('y',8).attr('width',30).attr('height',16);
+      g.append('rect').attr('class','chimney').attr('x',6).attr('y',0).attr('width',6).attr('height',10);
+      g.append('rect').attr('class','chimney').attr('x',18).attr('y',2).attr('width',6).attr('height',8);
+    } else if(d.type==='hospital'){
+      g.append('rect').attr('class','body').attr('x',2).attr('y',6).attr('width',28).attr('height',18);
+      g.append('rect').attr('class','cross').attr('x',14).attr('y',2).attr('width',4).attr('height',16);
+      g.append('rect').attr('class','cross').attr('x',10).attr('y',6).attr('width',12).attr('height',4);
+    } else if(d.type==='school'){
+      g.append('polygon').attr('class','roof').attr('points','0,8 15,0 30,8');
+      g.append('rect').attr('class','body').attr('x',2).attr('y',8).attr('width',28).attr('height',16);
+    } else if(d.type==='barracks'){
+      g.append('polygon').attr('class','roof').attr('points','0,8 15,2 30,8');
+      g.append('rect').attr('class','body').attr('x',2).attr('y',8).attr('width',28).attr('height',16);
+    }
   });
 }
 
@@ -604,7 +696,7 @@ function renderPanel(){
   document.getElementById('government').textContent = c.government;
   document.getElementById('playerTag').style.display = (String(c.id)===String(state.playerId)) ? '' : 'none';
 
-  // regions
+  // regions list
   const list = document.getElementById('regions'); list.innerHTML='';
   c.regions.forEach((r,idx)=>{
     const row = document.createElement('div'); row.className='row';
@@ -626,6 +718,8 @@ function renderPanel(){
   refreshMarket();
   renderResourceTotals(c);
   renderTradeUI();
+  renderBudgetPolicyUI();
+  renderResearchList();
 
   updateLeaderboard();
   redrawCountries();
@@ -634,7 +728,7 @@ function renderPanel(){
 }
 
 /* =========================
-   Market / Resources / Trade / Diplomacy
+   Market / Resources
    ========================= */
 function refreshMarket(){
   for(const k of RESOURCES){
@@ -651,6 +745,58 @@ function renderResourceTotals(c){
   const div = document.getElementById('resourceTotals');
   div.innerHTML = RESOURCES.map(r=>`<div class="row"><strong>${r}</strong> <small>${Math.round(c.stock[r]||0)} units</small></div>`).join('');
 }
+
+/* =========================
+   Budget & Conscription (Policies)
+   ========================= */
+function renderBudgetPolicyUI(){
+  const me = state.countries.get(state.playerId); if(!me) return;
+  const welfare = document.getElementById('budgetWelfare');
+  const welfareVal = document.getElementById('budgetWelfareVal');
+  welfare.value = me.budget.welfare; welfareVal.textContent = me.budget.welfare;
+  welfare.oninput = ()=> welfareVal.textContent = welfare.value;
+  document.getElementById('applyBudgetBtn').onclick = ()=>{
+    me.budget.welfare = +welfare.value;
+    const cons = document.getElementById('conscription');
+    me.conscription = +cons.value;
+    log(`Policies applied: Welfare ${me.budget.welfare}% • Conscription ${['Low','Medium','High'][me.conscription]}`);
+  };
+  const cons = document.getElementById('conscription');
+  const consLbl = document.getElementById('conscriptionLabel');
+  cons.value = me.conscription;
+  consLbl.textContent = ['Low','Medium','High'][me.conscription];
+  cons.oninput = ()=> consLbl.textContent = ['Low','Medium','High'][+cons.value];
+}
+
+/* =========================
+   Research (one-time)
+   ========================= */
+function renderResearchList(){
+  const me = state.countries.get(state.playerId); if(!me) return;
+  const box = document.getElementById('researchList'); box.innerHTML='';
+  RESEARCH.forEach(item=>{
+    const done = !!me.researchDone[item.id];
+    const row = document.createElement('div'); row.className='row';
+    row.innerHTML = `<div><strong>${item.name}</strong><br/><small>${item.desc}</small></div>
+      <div>${done?'<span class="pill">Unlocked</span>': `<button data-id="${item.id}">Unlock (${fmtMoney(item.cost)})</button>`}</div>`;
+    box.appendChild(row);
+  });
+  box.querySelectorAll('button[data-id]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.getAttribute('data-id');
+      const item = RESEARCH.find(r=>r.id===id);
+      const me = state.countries.get(state.playerId);
+      if(me.money < item.cost){ log('<span class="danger">Not enough money.</span>'); return; }
+      me.money -= item.cost; me.researchDone[id]=true; item.apply(me);
+      log(`Research unlocked: <strong>${item.name}</strong>.`);
+      renderPanel();
+    };
+  });
+}
+
+/* =========================
+   Trade, Gifts, Diplomacy
+   ========================= */
 function renderTradeUI(){
   const sel = document.getElementById('partnerSelect'); sel.innerHTML='';
   [...state.countries.values()].filter(x=>String(x.id)!==String(state.playerId)).sort((a,b)=>a.name.localeCompare(b.name))
@@ -668,6 +814,7 @@ function updateRelationHint(){
 }
 document.getElementById('partnerSelect').addEventListener('change', updateRelationHint);
 
+function bumpRelation(a,b,delta){ const k=keyPair(a,b); const v = state.relations.get(k) ?? 0; state.relations.set(k, clamp(v+delta, -100, 100)); updateRelationHint(); }
 function aiAcceptsTrade(sellerId, buyerId, res, amount, pricePerUnit){
   const buyer = state.countries.get(buyerId);
   const rel = state.relations.get(keyPair(sellerId, buyerId)) ?? 0;
@@ -680,8 +827,8 @@ document.getElementById('sellBtn').onclick = ()=>{
   const partnerId = document.getElementById('partnerSelect').value;
   const res = document.getElementById('tradeResource').value;
   const amt = Math.max(1, +document.getElementById('tradeAmount').value || 1);
-  if((me.stock[res]||0) < amt){ log('<span class="danger">You lack enough stock to sell.</span>'); return; }
-  const price = state.market[res] * (state.alliances.has(keyPair(state.playerId, partnerId)) ? 1.1 : 1.0);
+  if((me.stock[res]||0) < amt){ log('<span class="danger">You lack enough stock.</span>'); return; }
+  const price = state.market[res] * (state.alliances.has(keyPair(state.playerId, partnerId)) ? 1.1 : 1.0) * (1 + (state.countries.get(state.playerId).researchBuffs.saleBonus||0));
   if(!aiAcceptsTrade(state.playerId, partnerId, res, amt, price)){ log(`<span class="danger">${state.countries.get(partnerId).name} declined your offer.</span>`); return; }
   me.stock[res]-=amt; me.money += price*amt;
   const partner = state.countries.get(partnerId); partner.stock[res]=(partner.stock[res]||0)+amt; partner.money -= price*amt;
@@ -695,9 +842,9 @@ document.getElementById('buyBtn').onclick = ()=>{
   const res = document.getElementById('tradeResource').value;
   const amt = Math.max(1, +document.getElementById('tradeAmount').value || 1);
   const partner = state.countries.get(partnerId);
-  if((partner.stock[res]||0) < amt){ log('<span class="danger">Partner lacks enough stock.</span>'); return; }
+  if((partner.stock[res]||0) < amt){ log('<span class="danger">Partner lacks stock.</span>'); return; }
   const price = state.market[res] * (state.alliances.has(keyPair(state.playerId, partnerId)) ? 0.9 : 1.0);
-  const cost = price*amt; if(me.money < cost){ log('<span class="danger">You lack the funds.</span>'); return; }
+  const cost = price*amt; if(me.money < cost){ log('<span class="danger">You lack funds.</span>'); return; }
   if(!aiAcceptsTrade(partnerId, state.playerId, res, amt, price)){ log(`<span class="danger">${partner.name} declined to sell.</span>`); return; }
   partner.stock[res]-=amt; partner.money += cost;
   me.stock[res]=(me.stock[res]||0)+amt; me.money -= cost;
@@ -708,41 +855,55 @@ document.getElementById('buyBtn').onclick = ()=>{
 document.getElementById('allyBtn').onclick = ()=>{
   const me = state.countries.get(state.playerId);
   const partnerId = document.getElementById('partnerSelect').value;
-  offerAlliance(me.id, partnerId, true);
-};
-function offerAlliance(fromId, toId, logPlayer){
-  const k = keyPair(fromId, toId);
+  const k = keyPair(me.id, partnerId);
   const rel = state.relations.get(k) ?? 0;
-  if(state.alliances.has(k)){ if(logPlayer) log('Already allied.'); return; }
-  if(state.wars.has(k)){ if(logPlayer) log('<span class="danger">Cannot ally while at war.</span>'); return; }
+  if(state.alliances.has(k)){ log('Already allies.'); return; }
+  if(state.wars.has(k)){ log('<span class="danger">Can’t ally while at war.</span>'); return; }
   const acceptChance = 0.5 + (rel/200) + (Math.random()*0.2-0.1);
   if(Math.random() < acceptChance){
     state.alliances.add(k);
-    const a = state.countries.get(fromId), b = state.countries.get(toId);
-    adjustAllRegions(a, +2); adjustAllRegions(b, +2);
-    bumpRelation(fromId, toId, +15);
-    log(`Alliance formed between ${a.name} and ${b.name}! (+2 happiness both)`);
-    drawAllianceLines(); redrawCountries(); updateRelationHint();
+    adjustAllRegions(me, +2); adjustAllRegions(state.countries.get(partnerId), +2);
+    bumpRelation(me.id, partnerId, +15);
+    log(`Alliance formed with ${state.countries.get(partnerId).name}! (+2 happiness both)`);
+    drawAllianceLines(); redrawCountries();
   }else{
-    bumpRelation(fromId, toId, -5);
-    const b = state.countries.get(toId);
-    if(logPlayer) log(`<span class="danger">${b.name} refused your alliance.</span>`);
-    // small chance of counter-offer later
+    bumpRelation(me.id, partnerId, -5);
+    log(`<span class="danger">${state.countries.get(partnerId).name} refused your alliance.</span>`);
   }
-}
+};
+document.getElementById('giftMoneyBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const partnerId = document.getElementById('partnerSelect').value;
+  if(me.money < 500){ log('<span class="danger">Not enough money.</span>'); return; }
+  me.money -= 500; state.countries.get(partnerId).money += 500;
+  bumpRelation(me.id, partnerId, +8);
+  log(`You sent ${fmtMoney(500)} to ${state.countries.get(partnerId).name}. Relations improved.`);
+  renderPanel();
+};
+document.getElementById('giftResBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const partnerId = document.getElementById('partnerSelect').value;
+  const res = document.getElementById('tradeResource').value;
+  if((me.stock[res]||0) < 20){ log('<span class="danger">You lack resource units.</span>'); return; }
+  me.stock[res]-=20; state.countries.get(partnerId).stock[res]=(state.countries.get(partnerId).stock[res]||0)+20;
+  bumpRelation(me.id, partnerId, +6);
+  log(`You sent 20 ${res} to ${state.countries.get(partnerId).name}. Relations improved.`);
+  renderPanel();
+};
 
 /* =========================
-   War & conquest
+   Military / War
    ========================= */
+function adjustAllRegions(country, delta){ country.regions.forEach(r=> r.happiness = clamp(r.happiness + delta, 0, 100)); }
 document.getElementById('declareWarBtn').onclick = ()=>{
   const enemyId = document.getElementById('partnerSelect').value;
   const k = keyPair(state.playerId, enemyId);
-  if(state.wars.has(k)){ log('War is already active.'); return; }
+  if(state.wars.has(k)){ log('War already active.'); return; }
   state.wars.add(k);
   bumpRelation(state.playerId, enemyId, -25);
   state.alliances.delete(k);
   log(`<span class="danger">You declared war on ${state.countries.get(enemyId).name}!</span>`);
-  updateRelationHint(); redrawCountries();
+  redrawCountries();
 };
 document.getElementById('peaceBtn').onclick = ()=>{
   const enemyId = document.getElementById('partnerSelect').value;
@@ -750,7 +911,6 @@ document.getElementById('peaceBtn').onclick = ()=>{
   if(!state.wars.has(k)){ log('You are not at war.'); return; }
   if(Math.random()<0.6){ state.wars.delete(k); bumpRelation(state.playerId, enemyId, +10); log(`Peace signed with ${state.countries.get(enemyId).name}.`); }
   else { log(`<span class="danger">${state.countries.get(enemyId).name} refused peace.</span>`); bumpRelation(state.playerId, enemyId, -3); }
-  updateRelationHint();
 };
 document.getElementById('attackBtn').onclick = ()=>{
   const enemyId = document.getElementById('partnerSelect').value;
@@ -758,27 +918,25 @@ document.getElementById('attackBtn').onclick = ()=>{
   if(!state.wars.has(k)){ log('<span class="danger">You must be at war to attack.</span>'); return; }
   const me = state.countries.get(state.playerId);
   const enemy = state.countries.get(enemyId);
-  // choose weakest enemy region
+  if(!enemy.regions.length){ log('Enemy has no regions left.'); return; }
   const eIdx = enemy.regions.reduce((bi,_,i,arr)=> arr[i].happiness < arr[bi].happiness ? i : bi, 0);
   const myRegion = me.regions[state.selectedRegionIdx];
   const myPower = myRegion.troops + Math.min(10, Math.floor(me.military*0.3));
   const enemyPower = enemy.regions[eIdx].troops + Math.min(10, Math.floor(enemy.military*0.25));
-  // resolve
-  if(myPower <= 0){ log('<span class="danger">You have no troops in the selected region.</span>'); return; }
+  if(myPower <= 0){ log('<span class="danger">No troops in the selected region.</span>'); return; }
   const roll = (myPower + (Math.random()*6)) - (enemyPower + (Math.random()*6));
   if(roll > 0){
-    // conquest: move region from enemy to player
     const taken = enemy.regions.splice(eIdx,1)[0];
     taken.happiness = clamp(taken.happiness - 10, 0, 100);
-    taken.troops = Math.floor(myPower*0.5);
+    const newTroops = Math.max(1, Math.floor(myPower*0.5));
+    taken.troops = newTroops;
     me.regions.push(taken);
-    myRegion.troops = Math.max(0, myRegion.troops - Math.floor(myPower*0.5));
+    myRegion.troops = Math.max(0, myRegion.troops - newTroops);
     enemy.military = Math.max(0, enemy.military - 5);
     me.military = Math.max(0, me.military - 3);
     adjustAllRegions(enemy, -2);
     log(`<strong>Victory!</strong> You captured ${taken.name} from ${enemy.name}.`);
   }else{
-    // failed
     myRegion.troops = Math.max(0, myRegion.troops - Math.ceil(enemyPower*0.5));
     me.military = Math.max(0, me.military - 4);
     adjustAllRegions(me, -1);
@@ -786,13 +944,89 @@ document.getElementById('attackBtn').onclick = ()=>{
   }
   renderPanel(); buildRegionOverlay(state.selectedId);
 };
+document.getElementById('assignTroopsBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const d = Math.max(0, +document.getElementById('troopDelta').value||0);
+  if(d<=0) return;
+  if(me.military < d){ log('<span class="danger">Not enough units in pool.</span>'); return; }
+  me.military -= d; me.regions[state.selectedRegionIdx].troops += d;
+  log(`Assigned ${d} troops to ${me.regions[state.selectedRegionIdx].name}.`);
+  renderPanel(); buildRegionOverlay(state.playerId);
+};
+document.getElementById('removeTroopsBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId);
+  const d = Math.max(0, +document.getElementById('troopDelta').value||0);
+  const r = me.regions[state.selectedRegionIdx];
+  if(d<=0) return;
+  if(r.troops < d){ log('<span class="danger">Region lacks that many troops.</span>'); return; }
+  r.troops -= d; me.military += d;
+  log(`Removed ${d} troops from ${r.name}.`);
+  renderPanel(); buildRegionOverlay(state.playerId);
+};
 
 /* =========================
-   Player actions (gov, develop, troops, pop)
+   Projects & Buildings placement
    ========================= */
-function adjustAllRegions(country, delta){ country.regions.forEach(r=> r.happiness = clamp(r.happiness + delta, 0, 100)); }
-function bumpRelation(a,b,delta){ const k=keyPair(a,b); const v = state.relations.get(k) ?? 0; state.relations.set(k, clamp(v+delta, -100, 100)); updateRelationHint(); }
+function renderProjects(){
+  const c = state.countries.get(state.selectedId); if(!c) return;
+  const idx = state.selectedRegionIdx || 0;
+  const r = c.regions[idx];
+  const list = document.getElementById('projectList'); list.innerHTML='';
+  if(r.project){
+    list.innerHTML = `<div class="row"><strong>${r.project.desc}</strong><small>${r.project.durationLeft} turns left</small></div>`;
+  }else{
+    list.innerHTML = `<div class="row"><small>No active project in ${r.name}.</small></div>`;
+  }
+}
+document.getElementById('startProjectBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId); if(!me) return;
+  const idx = state.selectedRegionIdx || 0;
+  const r = me.regions[idx];
+  if(r.project){ log('<span class="danger">A project is already active.</span>'); return; }
+  if(me.money < 250){ log('<span class="danger">Not enough money.</span>'); return; }
+  const type = document.getElementById('projectSelect').value;
+  me.money -= 250;
+  if(type==='infra'){ r.project = {type, durationLeft:4, desc:`Infrastructure in ${r.name} (+2 happiness/turn)`}; }
+  if(type==='upgrade'){ r.project = {type, durationLeft:3, desc:`Resource upgrade in ${r.name} (+20% production)`}; }
+  if(type==='culture'){ r.project = {type, durationLeft:2, desc:`Cultural program in ${r.name} (+8 happiness once)`}; }
+  log(`Started project: ${r.project.desc}`);
+  renderPanel();
+};
+document.getElementById('placeBuildingBtn').onclick = ()=>{
+  const me = state.countries.get(state.playerId); if(!me) return;
+  const type = document.getElementById('buildSelect').value;
+  const costMap = {house:200, factory:400, hospital:450, school:350, barracks:300};
+  const cost = costMap[type]||200;
+  if(me.money < cost){ log('<span class="danger">Not enough money.</span>'); return; }
+  me.money -= cost;
+  state.placingBuilding = {type};
+  log(`Placing ${type}. Click inside your country to drop it.`);
+  state.regionOverlayG.on('click.place', (ev)=>{
+    if(!state.placingBuilding) return;
+    const [x,y] = d3.pointer(ev, g.node());
+    const idx = state.selectedRegionIdx;
+    me.buildings.push({type: state.placingBuilding.type, x, y, regionIdx: idx});
+    // building effects
+    const r = me.regions[idx];
+    if(type==='hospital') r.happiness = clamp(r.happiness + 4, 0, 100);
+    if(type==='school') r.production += 1;
+    if(type==='barracks') r.troops += 2;
+    if(type==='factory'){ me.money += 25; r.happiness = clamp(r.happiness - 1, 0, 100); }
+    if(type==='house'){ r.population += 800; }
+    state.placingBuilding = null;
+    log(`Building placed and effects applied.`);
+    state.regionOverlayG.on('click.place', null);
+    drawBuildings(); renderPanel();
+  });
+};
+document.getElementById('moveBuildingsToggle').onchange = (e)=>{
+  state.movingBuildings = e.target.checked;
+  drawBuildings();
+};
 
+/* =========================
+   Player actions (overview)
+   ========================= */
 document.getElementById('developAllBtn').onclick = ()=>{
   const me = state.countries.get(state.playerId); if(!me) return;
   if(me.money < 400){ log('<span class="danger">Not enough money.</span>'); return; }
@@ -810,124 +1044,18 @@ document.getElementById('govSelect').onchange = (e)=>{
   e.target.value='';
   renderPanel(); buildRegionOverlay(state.playerId);
 };
-document.getElementById('buyMilBtn').onclick = ()=>{
-  const me = state.countries.get(state.playerId); if(!me) return;
-  const units = +prompt('How many units? ($50 each)', '5') || 0;
-  const cost = units*50; if(cost<=0) return;
-  if(me.money < cost){ log('<span class="danger">You lack the funds.</span>'); return; }
-  me.money -= cost; me.military += units;
-  const penalty = Math.floor(units/3); adjustAllRegions(me, -penalty);
-  log(`Bought ${units} units. National happiness -${penalty}.`);
-  renderPanel();
-};
-document.getElementById('assignTroopsBtn').onclick = ()=>{
-  const me = state.countries.get(state.playerId);
-  const d = Math.max(0, +document.getElementById('troopDelta').value||0);
-  if(d<=0) return;
-  if(me.military < d){ log('<span class="danger">Not enough units in your pool.</span>'); return; }
-  me.military -= d; me.regions[state.selectedRegionIdx].troops += d;
-  log(`Assigned ${d} troops to ${me.regions[state.selectedRegionIdx].name}.`);
-  renderPanel(); buildRegionOverlay(state.playerId);
-};
-document.getElementById('removeTroopsBtn').onclick = ()=>{
-  const me = state.countries.get(state.playerId);
-  const d = Math.max(0, +document.getElementById('troopDelta').value||0);
-  const r = me.regions[state.selectedRegionIdx];
-  if(d<=0) return;
-  if(r.troops < d){ log('<span class="danger">Region lacks that many troops.</span>'); return; }
-  r.troops -= d; me.military += d;
-  log(`Removed ${d} troops from ${r.name}.`);
-  renderPanel(); buildRegionOverlay(state.playerId);
-};
-document.getElementById('addPop50kBtn').onclick = ()=> addPopToRegion(50_000, 5000);
-document.getElementById('addPop200kBtn').onclick = ()=> addPopToRegion(200_000, 20000);
-function addPopToRegion(delta, cost){
-  const me = state.countries.get(state.playerId);
-  const r = me.regions[state.selectedRegionIdx];
-  if(me.money < cost){ log('<span class="danger">Not enough money.</span>'); return; }
-  me.money -= cost; r.population += delta; r.happiness = clamp(r.happiness + 2, 0, 100);
-  // add a little house/house+house to visualize growth
-  placeBuildingAtCenter('house', state.playerId, state.selectedRegionIdx);
-  log(`Added ${delta.toLocaleString()} people to ${r.name}.`);
-  renderPanel(); buildRegionOverlay(state.playerId);
-}
 
 /* =========================
-   Projects & Buildings placement
-   ========================= */
-function renderProjects(){
-  const c = state.countries.get(state.selectedId); if(!c) return;
-  const idx = state.selectedRegionIdx || 0;
-  const r = c.regions[idx];
-  const list = document.getElementById('projectList'); list.innerHTML='';
-  if(r.project){
-    list.innerHTML = `<div class="row"><strong>${r.project.desc}</strong><small>${r.project.durationLeft} turns left</small></div>`;
-  }else{
-    list.innerHTML = `<div class="row"><small>No active project in ${r.name}.</small></div>`;
-  }
-}
-
-document.getElementById('startProjectBtn').onclick = ()=>{
-  const me = state.countries.get(state.playerId); if(!me) return;
-  const idx = state.selectedRegionIdx || 0;
-  const r = me.regions[idx];
-  if(r.project){ log('<span class="danger">A project is already active in this region.</span>'); return; }
-  if(me.money < 250){ log('<span class="danger">Not enough money.</span>'); return; }
-  const type = document.getElementById('projectSelect').value;
-  me.money -= 250;
-  if(type==='infra'){ r.project = {type, durationLeft:4, desc:`Infrastructure in ${r.name} (+2 happiness/turn)`}; }
-  if(type==='upgrade'){ r.project = {type, durationLeft:3, desc:`Resource upgrade in ${r.name} (+20% production)`}; }
-  if(type==='culture'){ r.project = {type, durationLeft:2, desc:`Cultural program in ${r.name} (+8 happiness once)`}; }
-  log(`Started project: ${r.project.desc}`);
-  renderPanel();
-};
-
-document.getElementById('placeBuildingBtn').onclick = ()=>{
-  const me = state.countries.get(state.playerId); if(!me) return;
-  const type = document.getElementById('buildSelect').value;
-  const cost = (type==='house')?200:400;
-  if(me.money < cost){ log('<span class="danger">Not enough money.</span>'); return; }
-  me.money -= cost;
-  state.placingBuilding = {type};
-  log(`Placing ${type}. Click inside your country to drop it.`);
-  // next click on overlay places it
-  state.regionOverlayG.on('click.place', (ev)=>{
-    if(!state.placingBuilding) return;
-    const [x,y] = d3.pointer(ev, g.node());
-    const idx = state.selectedRegionIdx;
-    me.buildings.push({type: state.placingBuilding.type, x, y, regionIdx: idx});
-    state.placingBuilding = null;
-    log(`Building placed.`);
-    state.regionOverlayG.on('click.place', null);
-    drawBuildings();
-  });
-};
-
-document.getElementById('moveBuildingsToggle').onchange = (e)=>{
-  state.movingBuildings = e.target.checked;
-  drawBuildings();
-};
-
-function placeBuildingAtCenter(type, ownerId, regionIdx){
-  const feature = state.features.find(f=> f.properties.cid===String(ownerId));
-  if(!feature || !state.regionOverlayG) return;
-  const cxy = projection(d3.geoCentroid(feature));
-  const owner = state.countries.get(ownerId);
-  const x = cxy ? cxy[0] + (Math.random()*20-10) : 50 + Math.random()*50;
-  const y = cxy ? cxy[1] + (Math.random()*20-10) : 50 + Math.random()*50;
-  owner.buildings.push({type, x, y, regionIdx});
-  drawBuildings();
-}
-
-/* =========================
-   Turn loop: production, projects, events, AI
+   Turn loop: production, projects, policy effects, events, AI
    ========================= */
 function playerProductionAndProjects(){
   const me = state.countries.get(state.playerId); if(!me) return;
+  // production
   for(const r of me.regions){
     const eff = r.project && r.project.type==='upgrade' ? 1.2 : 1.0;
     me.stock[r.resource] += r.production * eff;
   }
+  // projects
   for(const r of me.regions){
     if(r.project){
       if(r.project.type==='infra'){ r.happiness = clamp(r.happiness + 2, 0, 100); }
@@ -936,8 +1064,21 @@ function playerProductionAndProjects(){
       if(r.project.durationLeft<=0) r.project=null;
     }
   }
+  // budget effects
+  const w = me.budget.welfare/100, m = 1-w;
+  me.money += Math.round(40*m); // military budget yields some income via industry
+  me.regions.forEach(r=>{ r.happiness = clamp(r.happiness + (w*1.5), 0, 100); });
+  // conscription
+  const cons = me.conscription; // 0/1/2
+  const troopGain = cons===0? 1 : cons===1? 3 : 6;
+  me.military += troopGain;
+  adjustAllRegions(me, -(cons===2?2:cons===1?1:0)); // high conscription hurts happiness
+  // research timed buff
+  if(me.researchBuffs.happyOverTime>0){
+    me.regions.forEach(r=> r.happiness = clamp(r.happiness + 2, 0, 100));
+    me.researchBuffs.happyOverTime -= 1;
+  }
 }
-
 function aiTurnOne(c){
   // produce
   for(const r of c.regions){
@@ -953,33 +1094,29 @@ function aiTurnOne(c){
       if(r.project.durationLeft<=0) r.project=null;
     }
   }
-
+  // simple AI budget/conscription drift
+  c.money += 80;
+  if(Math.random()<0.2){ c.conscription = clamp((c.conscription + (Math.random()<0.5?-1:1)),0,2); }
+  if(Math.random()<0.2){ c.budget.welfare = clamp(c.budget.welfare + (Math.random()<0.5?-10:10),0,100); }
   // behavior
   const worst = [...c.regions].sort((a,b)=> a.happiness - b.happiness)[0];
   if(c.money >= 200 && worst.happiness < 80){ c.money -= 200; worst.happiness = clamp(worst.happiness + 5, 0, 100); return `${c.name} invested in ${worst.name} (+5).`; }
   if(Math.random()<0.12){ const opts=['democracy','socialism','communism']; const g = opts[Math.floor(Math.random()*opts.length)];
     c.government=g; const boost=g==='democracy'?4:g==='socialism'?3:1; c.regions.forEach(r=>r.happiness=clamp(r.happiness+boost,0,100)); return `${c.name} changed government to ${g} (+${boost}).`; }
   if(c.money>=150 && Math.random()<0.16){ c.money-=150; c.military+=3; c.regions.forEach(r=>r.happiness=clamp(r.happiness-1,0,100)); return `${c.name} bought military (-1).`; }
-  // occasional alliance counter-proposal to player if friendly and not allied
-  const k = keyPair(c.id, state.playerId);
-  const rel = state.relations.get(k) ?? 0;
-  if(!state.alliances.has(k) && rel>25 && Math.random()<0.08){ offerAlliance(c.id, state.playerId, false); }
-  // sell surplus randomly
+  // intertrade
   if(Math.random()<0.25){
     const res=RESOURCES[Math.floor(Math.random()*RESOURCES.length)];
     const amt = Math.min(30, c.stock[res]||0);
     if(amt>0){ c.stock[res]-=amt; c.money += amt*state.market[res]; return `${c.name} sold ${amt} ${res}.`; }
   }
-  c.money += 80;
   return `${c.name} maintained stability.`;
 }
-
 function maybeEvent(){
   state.turn++;
   const banner = document.getElementById('eventBanner');
   banner.style.display='none';
   if(state.turn % 3 !== 0) return;
-
   const roll = Math.random();
   let msg='';
   if(roll < 0.25){
@@ -1019,7 +1156,6 @@ function maybeEvent(){
   banner.style.display = 'block';
   log(`<strong>Event:</strong> ${msg}`);
 }
-
 function aiIntertrade(){
   const ids = [...state.countries.keys()];
   if(ids.length<2) return;
@@ -1034,10 +1170,8 @@ function aiIntertrade(){
   b.stock[res]=(b.stock[res]||0)+amt; b.money -= amt*price;
   bumpRelation(a.id, b.id, +2);
 }
-
 function tick(){
   if(!state.running) return;
-
   playerProductionAndProjects();
   for(const c of state.countries.values()){
     if(String(c.id)!==String(state.playerId)){
@@ -1064,7 +1198,7 @@ const slotSel = document.getElementById('saveSlot');
 function currentKey(){ return STORAGE_KEY_BASE + (slotSel.value || '1'); }
 document.getElementById('saveBtn').onclick = ()=>{
   const payload = {
-    version: 4,
+    version: 5,
     playerId: state.playerId,
     selectedId: state.selectedId,
     selectedRegionIdx: state.selectedRegionIdx,
@@ -1076,6 +1210,7 @@ document.getElementById('saveBtn').onclick = ()=>{
     data: [...state.countries.entries()].map(([id,c])=>[String(id),{
       id:String(c.id), name:c.name, money:c.money, military:c.military, government:c.government, isAI:c.isAI,
       stock:c.stock, buildings:c.buildings,
+      budget:c.budget, conscription:c.conscription, researchDone:c.researchDone, researchBuffs:c.researchBuffs,
       regions: c.regions.map(r=>({name:r.name, population:r.population, happiness:r.happiness, resource:r.resource, production:r.production, project:r.project, troops:r.troops}))
     }])
   };
@@ -1101,7 +1236,7 @@ document.getElementById('loadBtn').onclick = ()=>{
     state.running = true;
     const selectId = state.selectedId || state.playerId || [...state.countries.keys()][0];
     selectCountry(selectId, true);
-    updateLeaderboard(); refreshMarket(); drawAllianceLines();
+    updateLeaderboard(); refreshMarket(); drawAllianceLines(); renderResearchList();
     log(`Loaded from slot ${slotSel.value}.`);
   }catch(e){ console.error(e); log('<span class="danger">Failed to load save.</span>'); }
 };
