@@ -118,107 +118,116 @@
 <script src="https://cdn.jsdelivr.net/npm/d3-scale-chromatic@3/dist/d3-scale-chromatic.min.js"></script>
 
 <script>
-/* ============================================================
-   WORLD + GAME STATE
-   - Loads world map (all countries)
-   - Generates regions per country with population & happiness
-   - Colors by population-weighted happiness
-   ============================================================ */
-
+/* =========================
+   Robust loaders & helpers
+   ========================= */
 const STORAGE_KEY = 'whc_v1_save';
 
-// seeded RNG so each country gets stable regions across runs
+const fmtMoney = (v)=>'$'+Math.round(v).toLocaleString();
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+
+// deterministic RNG per country id
 function xorshift(seed) {
   let x = seed >>> 0;
-  return function() {
-    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-    return ((x >>> 0) / 4294967296);
-  }
+  return function() { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return ((x>>>0)/4294967296); }
 }
 function pickWeightedDirichlet(rand, n) {
-  let arr = Array.from({length:n}, () => -Math.log(1 - rand()));
-  let sum = arr.reduce((a,b)=>a+b,0);
+  const arr = Array.from({length:n}, () => -Math.log(1 - rand()));
+  const sum = arr.reduce((a,b)=>a+b,0);
   return arr.map(v=>v/sum);
 }
 
 const state = {
-  countries: new Map(),     // id -> { id, name, money, military, government, regions:[{name,pop,h}], isAI }
+  countries: new Map(), // id(string)-> country obj
+  features: [],
   playerId: null,
   selectedId: null,
   tickMs: 6000,
   running: false,
 };
 
-const fmtMoney = (v)=>'$'+Math.round(v).toLocaleString();
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-
-function overallHappiness(country){
-  const tot = country.regions.reduce((s,r)=>s+r.population,0);
-  const sum = country.regions.reduce((s,r)=>s+r.happiness*r.population,0);
+function overallHappiness(c){
+  const tot = c.regions.reduce((s,r)=>s+r.population,0);
+  const sum = c.regions.reduce((s,r)=>s+r.happiness*r.population,0);
   return Math.round(sum / Math.max(1,tot));
 }
+function colorForH(h){ return d3.interpolateRdYlGn(clamp(h/100,0,1)); }
 
-function colorForH(h){
-  // 0..100 using RdYlGn
-  const t = clamp(h/100,0,1);
-  return d3.interpolateRdYlGn(t);
+/* ===========
+   Map plumbing
+   =========== */
+const mapEl = d3.select('#map');
+let W=0,H=0, svg, g, projection, path;
+
+function sizeMap(){
+  W = mapEl.node().getBoundingClientRect().width || 800;
+  H = document.getElementById('mapWrap').getBoundingClientRect().height || 500;
+  if(!svg){
+    svg = mapEl.append('svg');
+    g = svg.append('g');
+    svg.append('path').attr('class','ocean').attr('fill','#87b7e9').attr('stroke','none');
+  }
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+  projection = d3.geoNaturalEarth1().fitSize([W, H], {type:"Sphere"});
+  path = d3.geoPath(projection);
+  svg.select('path.ocean').attr('d', path({type:'Sphere'}));
+  redrawCountries();
+}
+window.addEventListener('resize', sizeMap);
+
+/* ==========================================
+   Load world: topology + robust name mapping
+   ========================================== */
+async function loadNames() {
+  const urls = [
+    'https://cdn.jsdelivr.net/npm/world-atlas@2/country-names.tsv',
+    'https://unpkg.com/world-atlas@2/country-names.tsv'
+  ];
+  for (const u of urls) {
+    try {
+      const r = await fetch(u, {cache:'force-cache'});
+      if (!r.ok) continue;
+      const tsv = await r.text();
+      const rows = d3.tsvParse(tsv); // robust tsv parser
+      const map = new Map();
+      rows.forEach(row=>{
+        const idNum = +row.id;
+        if(!isNaN(idNum)) map.set(idNum, row.name);
+      });
+      if(map.size) return map;
+    } catch(_) {}
+  }
+  return new Map(); // fallback
 }
 
-/* ============================================================
-   MAP RENDER
-   ============================================================ */
-const mapEl = d3.select('#map');
-const W = mapEl.node().getBoundingClientRect().width;
-const H = document.getElementById('mapWrap').getBoundingClientRect().height;
+async function initWorld(){
+  sizeMap();
+  const topology = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json());
+  const nameMap = await loadNames();
 
-const svg = mapEl.append('svg').attr('viewBox', `0 0 ${W} ${H}`);
-const g = svg.append('g');
-
-const projection = d3.geoNaturalEarth1().fitSize([W, H], {type:"Sphere"});
-const path = d3.geoPath(projection);
-
-svg.append('path')
-  .attr('d', path({type:'Sphere'}))
-  .attr('fill', '#87b7e9')
-  .attr('stroke', 'none');
-
-let features=[]; // geojson features for countries
-
-Promise.all([
-  fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json').then(r=>r.json()),
-  fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/country-names.tsv').then(r=>r.text())
-]).then(([topology, tsv])=>{
-  const countries = topojson.feature(topology, topology.objects.countries).features;
-  const nameMap = new Map();
-  // TSV columns: id  name
-  tsv.trim().split('\n').slice(1).forEach(line=>{
-    const [id,name] = line.split('\t');
-    nameMap.set(+id, name);
-  });
-
-  features = countries.map(f=>{
-    const id = +f.id;
-    f.properties.name = nameMap.get(id) || `ID_${id}`;
-    f.properties.cid = String(id); // numeric id as key
+  state.features = topojson.feature(topology, topology.objects.countries).features.map(f=>{
+    const idNum = +f.id;
+    const name = nameMap.get(idNum) || f.properties?.name || `Country ${idNum}`;
+    const cid = String(idNum);
+    f.properties = { ...f.properties, name, cid };
     return f;
   });
 
-  // Initialize state per country
-  for(const f of features){
+  // init countries
+  state.countries.clear();
+  for(const f of state.features){
     const id = f.properties.cid;
     const name = f.properties.name;
-
     const rand = xorshift(+id * 2654435761);
     const regionsCount = 3 + Math.floor(rand()*6); // 3..8
     const weights = pickWeightedDirichlet(rand, regionsCount);
-    const totalPop = 2_000_000 + Math.floor(rand()*60_000_000); // 2M..62M baseline (fictional)
+    const totalPop = 2_000_000 + Math.floor(rand()*60_000_000); // fictional baseline
     const baseH = 40 + Math.floor(rand()*30); // 40..70
     const regions = weights.map((w,i)=>({
       name: `${name} Region ${i+1}`,
       population: Math.max(50_000, Math.round(totalPop*w)),
       happiness: clamp(baseH + Math.floor(rand()*20-10), 10, 90)
     }));
-
     state.countries.set(id, {
       id, name,
       money: 1000 + Math.floor(rand()*1500),
@@ -229,34 +238,36 @@ Promise.all([
     });
   }
 
-  drawMap();
   populateSelector();
+  redrawCountries();
   updateLeaderboard();
-  log(`World initialized with ${state.countries.size} countries and ${[...state.countries.values()].reduce((a,c)=>a+c.regions.length,0)} regions.`);
-});
+  log(`World ready: ${state.countries.size} countries.`);
+}
 
-function drawMap(){
-  const land = g.selectAll('path.country')
-    .data(features, d=>d.properties.cid);
+/* =========================
+   Draw / update the countries
+   ========================= */
+function redrawCountries(){
+  if(!state.features.length || !path) return;
+  const land = g ? g.selectAll('path.country').data(state.features, d=>d.properties.cid) : null;
+  if(!land) return;
 
-  land.enter().append('path')
+  const enter = land.enter().append('path')
     .attr('class','country')
     .attr('d', path)
     .attr('stroke','#1b1f39')
     .attr('stroke-width',0.5)
-    .attr('fill', d => {
-      const c = state.countries.get(d.properties.cid);
-      return colorForH(overallHappiness(c || {regions:[]} ));
-    })
-    .on('click', (_e,d)=> selectCountry(d.properties.cid, true))
-    .append('title')
-    .text(d => d.properties.name);
+    .on('click', (_e,d)=> selectCountry(d.properties.cid, true));
 
-  land.transition().duration(400)
+  g.selectAll('path.country').selectAll('title').data(d => [d]).join('title').text(d => d.properties.name);
+
+  land.merge(enter)
     .attr('fill', d => {
       const c = state.countries.get(d.properties.cid);
-      return colorForH(overallHappiness(c || {regions:[]} ));
+      return colorForH(overallHappiness(c || {regions:[]}));
     });
+
+  land.exit().remove();
 }
 
 function zoomToFeature(f){
@@ -269,23 +280,25 @@ function zoomToFeature(f){
 }
 document.getElementById('resetViewBtn').onclick = ()=> g.transition().duration(600).attr('transform','translate(0,0) scale(1)');
 
-/* ============================================================
-   UI: SELECTOR + PANEL
-   ============================================================ */
+/* =========================
+   UI: selector + panel
+   ========================= */
 const countrySelect = document.getElementById('countrySelect');
+
 function populateSelector(){
+  countrySelect.innerHTML = '';
   const arr = [...state.countries.values()].sort((a,b)=> a.name.localeCompare(b.name));
   for(const c of arr){
     const opt = document.createElement('option');
-    opt.value = c.id;
+    opt.value = String(c.id);
     opt.textContent = c.name;
     countrySelect.appendChild(opt);
   }
 }
 
 function selectCountry(id, zoom=false){
-  state.selectedId = id;
-  const f = features.find(fe => fe.properties.cid === String(id));
+  state.selectedId = String(id);
+  const f = state.features.find(fe => fe.properties.cid === String(id));
   if (zoom && f) zoomToFeature(f);
   renderPanel();
 }
@@ -293,12 +306,11 @@ function selectCountry(id, zoom=false){
 document.getElementById('startBtn').onclick = ()=>{
   const id = countrySelect.value || [...state.countries.keys()][0];
   state.playerId = String(id);
-  // mark player
   state.countries.get(state.playerId).isAI = false;
   selectCountry(id, true);
   state.running = true;
   log(`You are playing as ${state.countries.get(state.playerId).name}. Maximize happiness!`);
-  tick(); // kick AI loop
+  tick();
   renderPanel();
 };
 
@@ -314,7 +326,6 @@ function renderPanel(){
   document.getElementById('military').textContent = Math.round(c.military);
   document.getElementById('government').textContent = c.government;
   document.getElementById('playerTag').style.display = (String(c.id)===String(state.playerId)) ? '' : 'none';
-  // actions visible only for player
   document.getElementById('actions').style.display = (String(c.id)===String(state.playerId)) ? '' : 'none';
   // regions
   const list = document.getElementById('regions');
@@ -332,12 +343,12 @@ function renderPanel(){
     list.appendChild(row);
   });
   updateLeaderboard();
-  drawMap(); // refresh colors
+  redrawCountries();
 }
 
-/* ============================================================
-   ACTIONS (PLAYER)
-   ============================================================ */
+/* =========================
+   Player actions
+   ========================= */
 const getPlayer = ()=> state.countries.get(state.playerId);
 
 document.getElementById('investBtn').onclick = ()=>{
@@ -366,9 +377,7 @@ document.getElementById('buyMilBtn').onclick = ()=>{
   const cost = units*50;
   if(cost<=0){ return; }
   if(me.money < cost){ log('<span class="danger">Not enough money for military.</span>'); return; }
-  me.money -= cost;
-  me.military += units;
-  // small national happiness penalty
+  me.money -= cost; me.military += units;
   const penalty = Math.floor(units/3);
   me.regions.forEach(r=> r.happiness = clamp(r.happiness - penalty, 0, 100));
   log(`Bought ${units} units. National happiness -${penalty}.`);
@@ -377,8 +386,7 @@ document.getElementById('buyMilBtn').onclick = ()=>{
 
 document.getElementById('govSelect').onchange = (e)=>{
   const me = getPlayer(); if(!me) return;
-  const g = e.target.value;
-  if(!g) return;
+  const g = e.target.value; if(!g) return;
   me.government = g;
   const boost = g==='democracy'?5 : g==='socialism'?3 : 1;
   me.regions.forEach(r=> r.happiness = clamp(r.happiness + boost, 0, 100));
@@ -387,20 +395,16 @@ document.getElementById('govSelect').onchange = (e)=>{
   renderPanel();
 };
 
-/* ============================================================
-   AI LOOP
-   ============================================================ */
-
+/* =========================
+   AI loop
+   ========================= */
 function aiTurnOne(c){
-  // AI tries to raise the lowest-weighted region first
   const worst = [...c.regions].sort((a,b)=> a.happiness - b.happiness)[0];
-  // simple priority: if money allows, invest; sometimes change govt; rarely buy military
   if(c.money >= 200){
     c.money -= 200;
     worst.happiness = clamp(worst.happiness + 5, 0, 100);
     return `${c.name} invested in ${worst.name} (+5).`;
   }
-  // 1/8 chance change government
   if(Math.random()<0.125){
     const opts=['democracy','socialism','communism'];
     const g = opts[Math.floor(Math.random()*opts.length)];
@@ -409,50 +413,40 @@ function aiTurnOne(c){
     c.regions.forEach(r=> r.happiness = clamp(r.happiness + boost, 0, 100));
     return `${c.name} changed government to ${g} (+${boost} all).`;
   }
-  // 1/6 chance to buy small military if cheap
   if(c.money >= 150 && Math.random()<0.166){
     c.money -= 150; c.military += 3;
     c.regions.forEach(r=> r.happiness = clamp(r.happiness - 1, 0, 100));
     return `${c.name} bought military (-1 national happiness).`;
   }
-  // passive income & slight drift toward middle
   c.money += 60;
-  c.regions.forEach(r=>{
-    const target = 68;
-    r.happiness += (target - r.happiness) * 0.02; // gentle mean reversion
-  });
+  c.regions.forEach(r=>{ r.happiness += (68 - r.happiness)*0.02; });
   return `${c.name} maintained stability.`;
 }
 
 function tick(){
   if(!state.running) return;
-  // everyone receives passive income
-  for(const c of state.countries.values()){
-    c.money += 80;
-  }
-  // AI acts
+  for(const c of state.countries.values()){ c.money += 80; }
   for(const c of state.countries.values()){
     if(String(c.id)!==String(state.playerId)){
       const msg = aiTurnOne(c);
-      if(Math.random()<0.3) log(msg); // sample log noise
+      if(Math.random()<0.3) log(msg);
     }
   }
-  drawMap();
+  redrawCountries();
   updateLeaderboard();
-  renderPanel(); // if inspecting someone, refresh
+  renderPanel();
   setTimeout(tick, state.tickMs);
 }
 
-/* ============================================================
-   SAVE / LOAD
-   ============================================================ */
-
+/* =========================
+   Save / Load
+   ========================= */
 document.getElementById('saveBtn').onclick = ()=>{
   const payload = {
     version: 1,
     playerId: state.playerId,
-    data: [...state.countries.entries()].map(([id,c])=>[id,{
-      id:c.id, name:c.name, money:c.money, military:c.military, government:c.government, isAI:c.isAI,
+    data: [...state.countries.entries()].map(([id,c])=>[String(id),{
+      id:String(c.id), name:c.name, money:c.money, military:c.military, government:c.government, isAI:c.isAI,
       regions: c.regions.map(r=>({name:r.name, population:r.population, happiness:r.happiness}))
     }])
   };
@@ -465,24 +459,22 @@ document.getElementById('loadBtn').onclick = ()=>{
   if(!raw){ log('<span class="danger">No saved game found.</span>'); return; }
   try{
     const payload = JSON.parse(raw);
-    state.playerId = String(payload.playerId);
+    state.playerId = payload.playerId ? String(payload.playerId) : null;
     state.countries.clear();
-    for(const [id,c] of payload.data){
-      state.countries.set(String(id), c);
-    }
+    for(const [id,c] of payload.data){ state.countries.set(String(id), c); }
+    // keep existing features (geometry), just re-render
+    populateSelector();
     state.running = true;
-    // re-render
-    drawMap(); populateSelector(); selectCountry(state.playerId,true); renderPanel(); updateLeaderboard();
+    const selectId = state.playerId || [...state.countries.keys()][0];
+    selectCountry(selectId, true);
+    updateLeaderboard();
     log('Game loaded.');
-  }catch(e){
-    console.error(e); log('<span class="danger">Failed to load save.</span>');
-  }
+  }catch(e){ console.error(e); log('<span class="danger">Failed to load save.</span>'); }
 };
 
-/* ============================================================
-   LEADERBOARD + LOG
-   ============================================================ */
-
+/* =========================
+   Leaderboard + log
+   ========================= */
 function updateLeaderboard(){
   const holder = document.getElementById('leaderboard');
   const arr = [...state.countries.values()].map(c=>({ id:c.id, name:c.name, h:overallHappiness(c) }));
@@ -496,12 +488,16 @@ function updateLeaderboard(){
 function log(html){
   const el = document.getElementById('log');
   const p = document.createElement('div');
-  const ts = new Date().toLocaleTimeString();
-  p.innerHTML = `<span class="muted">${ts}</span> ${html}`;
+  p.innerHTML = `<span class="muted">${new Date().toLocaleTimeString()}</span> ${html}`;
   el.appendChild(p);
   el.scrollTop = el.scrollHeight;
 }
 
+/* Kick off */
+initWorld().catch(err=>{
+  console.error(err);
+  log('<span class="danger">Failed to load world map. Check your network/CSP.</span>');
+});
 </script>
 </body>
 </html>
