@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>World Conquest Game</title>
+<style>
+    body { font-family: Arial, sans-serif; background-color: #f0f0f0; padding: 20px; }
+    #game { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; }
+    button { margin: 5px; padding: 10px; }
+    #log { background: #eee; padding: 10px; height: 250px; overflow-y: scroll; border-radius: 5px; }
+    select, input { padding: 5px; margin: 5px; }
+</style>
+</head>
+<body>
+<div id="game">
+    <h1>World Conquest Game</h1>
+
+    <div id="chooseCountry">
+        <h2>Choose Your Country</h2>
+        <select id="countrySelect"></select>
+        <button onclick="startGame()">Start Game</button>
+    </div>
+
+    <div id="gameActions" style="display:none;">
+        <h2 id="playerCountryName"></h2>
+        <p>
+            Money: $<span id="money"></span> |
+            Military: <span id="military"></span> |
+            Land: <span id="land"></span> |
+            Government: <span id="government"></span> |
+            Happiness: <span id="happiness"></span>
+        </p>
+
+        <button onclick="developLand()">Develop Land ($200)</button>
+        <button onclick="buyMilitary()">Buy Military ($50/unit)</button>
+        <button onclick="changeGovernment()">Change Government</button>
+        <button onclick="attackCountry()">Attack Country</button>
+        <button onclick="saveGame()">💾 Save Game</button>
+        <button onclick="loadGame()">📂 Load Game</button>
+
+        <h3>Game Log</h3>
+        <div id="log"></div>
+
+        <h3>Current Leader by Happiness: <span id="leader"></span></h3>
+    </div>
+</div>
+
+<script>
+    // --- Country Class ---
+    class Country {
+        constructor(name) {
+            this.name = name;
+            this.money = 1000;
+            this.military = 50;
+            this.land = 5;
+            this.government = "democracy";
+            this.happiness = 50;
+            this.allies = [];
+            this.enemies = [];
+        }
+    }
+
+    // --- Initialize Countries ---
+    let countryNames = ["USA","China","Russia","France","Brazil","India","Egypt"];
+    let allCountries = [];
+    let playerCountry;
+
+    countryNames.forEach(name => allCountries.push(new Country(name)));
+
+    // Populate dropdown
+    let select = document.getElementById("countrySelect");
+    countryNames.forEach((name, index) => {
+        let option = document.createElement("option");
+        option.value = index;
+        option.text = name;
+        select.appendChild(option);
+    });
+
+    // --- Game Log ---
+    function log(message) {
+        let logDiv = document.getElementById("log");
+        logDiv.innerHTML += message + "<br>";
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // --- Start Game ---
+    function startGame() {
+        let index = document.getElementById("countrySelect").value;
+        playerCountry = allCountries[index];
+        document.getElementById("playerCountryName").innerText = playerCountry.name;
+        updateStats();
+        document.getElementById("chooseCountry").style.display = "none";
+        document.getElementById("gameActions").style.display = "block";
+        log(`You chose ${playerCountry.name}!`);
+    }
+
+    // --- Update Stats ---
+    function updateStats() {
+        document.getElementById("money").innerText = playerCountry.money;
+        document.getElementById("military").innerText = playerCountry.military;
+        document.getElementById("land").innerText = playerCountry.land;
+        document.getElementById("government").innerText = playerCountry.government;
+        document.getElementById("happiness").innerText = playerCountry.happiness;
+        updateLeader();
+    }
+
+    // --- Update Leader ---
+    function updateLeader() {
+        let leader = allCountries.reduce((max, c) => c.happiness > max.happiness ? c : max, allCountries[0]);
+        document.getElementById("leader").innerText = `${leader.name} (${leader.happiness})`;
+    }
+
+    // --- Player Actions ---
+    function developLand() {
+        if(playerCountry.money >= 200) {
+            playerCountry.money -= 200;
+            playerCountry.land += 1;
+            playerCountry.money += 50; // passive income
+            playerCountry.happiness = Math.min(playerCountry.happiness + 5, 100);
+            log("Developed land: +1 Land, -200 Money, +5 Happiness");
+            updateStats();
+        } else log("Not enough money to develop land.");
+    }
+
+    function buyMilitary() {
+        let units = parseInt(prompt("How many units to buy? ($50/unit)"));
+        let cost = units * 50;
+        if(playerCountry.money >= cost) {
+            playerCountry.money -= cost;
+            playerCountry.military += units;
+            playerCountry.happiness = Math.max(playerCountry.happiness - units, 0); // over-militarization reduces happiness
+            log(`Bought ${units} military units. Happiness decreased by ${units}`);
+            updateStats();
+        } else log("Not enough money to buy military.");
+    }
+
+    function changeGovernment() {
+        let gov = prompt("Choose government (democracy/socialism/communism):");
+        playerCountry.government = gov;
+        let happinessChange = gov === "democracy" ? 10 : (gov === "socialism" ? 5 : 0);
+        playerCountry.happiness = Math.min(playerCountry.happiness + happinessChange, 100);
+        log(`Changed government to ${gov}. Happiness +${happinessChange}`);
+        updateStats();
+    }
+
+    function attackCountry() {
+        let options = allCountries.filter(c => c !== playerCountry);
+        let names = options.map((c,i)=>`${i+1}. ${c.name}`).join("\n");
+        let choice = parseInt(prompt(`Choose a country to attack:\n${names}`));
+        let target = options[choice-1];
+        if(target) battle(playerCountry, target);
+        else log("Invalid choice.");
+        updateStats();
+    }
+
+    // --- Battle System ---
+    function battle(attacker, defender) {
+        let attackPower = attacker.military + Math.floor(Math.random()*20-10);
+        let defendPower = defender.military + Math.floor(Math.random()*20-10);
+        if(attackPower > defendPower) {
+            if(defender.land > 0) {
+                defender.land -= 1;
+                attacker.land += 1;
+                attacker.happiness = Math.min(attacker.happiness + 5, 100);
+                defender.happiness = Math.max(defender.happiness - 5, 0);
+                log(`${attacker.name} won the battle against ${defender.name}! Attacker +5 Happiness, Defender -5 Happiness`);
+            }
+        } else {
+            attacker.happiness = Math.max(attacker.happiness - 2, 0);
+            defender.happiness = Math.min(defender.happiness + 2, 100);
+            log(`${defender.name} defended successfully! Attacker -2 Happiness, Defender +2 Happiness`);
+        }
+    }
+
+    // --- AI Turns ---
+    function aiTurn() {
+        allCountries.forEach(c => {
+            if(c !== playerCountry) {
+                let actions = ["develop","military","government"];
+                let choice = actions[Math.floor(Math.random()*actions.length)];
+                if(choice=="develop") {
+                    if(c.money>=200){ c.money-=200; c.land+=1; c.money+=50; c.happiness=Math.min(c.happiness+5,100); log(`${c.name} developed land (+5 Happiness).`);}
+                } else if(choice=="military") {
+                    let units = Math.floor(Math.random()*5)+1;
+                    if(c.money>=units*50){ c.money-=units*50; c.military+=units; c.happiness=Math.max(c.happiness-units,0); log(`${c.name} bought ${units} military units (-${units} Happiness).`);}
+                } else {
+                    let govs = ["democracy","socialism","communism"];
+                    let gov = govs[Math.floor(Math.random()*govs.length)];
+                    c.government = gov;
+                    let h = gov==="democracy"?10:(gov==="socialism"?5:0);
+                    c.happiness = Math.min(c.happiness+h,100);
+                    log(`${c.name} changed government to ${gov} (+${h} Happiness).`);
+                }
+            }
+        });
+        updateStats();
+    }
+
+    // --- Save/Load ---
+    function saveGame() {
+        let saveData = JSON.stringify(allCountries);
+        localStorage.setItem("worldConquestSave", saveData);
+        log("Game saved! 💾");
+    }
+
+    function loadGame() {
+        let data = localStorage.getItem("worldConquestSave");
+        if(data){
+            let loaded = JSON.parse(data);
+            allCountries.forEach((c,i)=>Object.assign(c, loaded[i]));
+            playerCountry = allCountries.find(c => c.name === playerCountry.name);
+            updateStats();
+            log("Game loaded! 📂");
+        } else log("No saved game found.");
+    }
+
+    // --- Run AI turn every 10 seconds ---
+    setInterval(aiTurn, 10000);
+</script>
+</body>
+</html>
